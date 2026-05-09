@@ -1655,16 +1655,15 @@ function endGame() {
   const winnerTime = Math.min.apply(null, racers.map(r => r.time));
   const winner = racers.find(r => r.time === winnerTime);
   winner.isFirst = true;
-  // First place across the line collects a +1500 finish bonus on top of
-  // their accumulated raw score (added before the penalty math, so the
-  // bonus shows up in both the SCORE and FINAL columns).
-  winner.bonus = 1500;
-  winner.raw += 1500;
+  // First place collects a +2500 finish bonus. We keep it separate from
+  // raw so the SCORE column still shows the actual race-earned points
+  // and the bonus is visibly added in when computing FINAL.
+  winner.bonus = 2500;
 
   for (const r of racers) {
     const deltaS = Math.max(0, r.time - winnerTime);
     r.penalty = Math.round(deltaS * 450);
-    r.final   = r.raw - r.penalty;
+    r.final   = r.raw + (r.bonus || 0) - r.penalty;
   }
 
   // Leaderboard ranked by final score (winner of the race may not be the
