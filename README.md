@@ -6,7 +6,7 @@ A pseudo-3D synthwave arcade racer starring Ron, the iConnections CEO, racing
 his motorcycle to **Global Alts Miami** through neon Miami nights. Collect
 Sponsors, Fund Managers, Allocators, and AI Boost charges. Dodge phishing
 emails, platform outages, and snowstorms. Beat Apexion and Konnexxt to the
-finish line. The road to Global Alts is never smooth.
+finish line. The road to Global Alts isn't always smooth.
 
 [Play in your browser](https://kevmiclee12.github.io/GA_27_TURBO/)
 
@@ -43,7 +43,7 @@ This repo is configured to deploy from the `main` branch root.
 
 1. Push `main` to GitHub.
 2. In the repo on github.com, go to **Settings → Pages**.
-3. Under **Build and deployment**, set **Source** to *Deploy from a branch*,
+3. Under **Build and deployment**, set **Source** to _Deploy from a branch_,
    **Branch** to `main`, and folder to `/ (root)`.
 4. Save. After a minute or two the site is live at
    `https://<your-username>.github.io/GA_27_TURBO/`.
