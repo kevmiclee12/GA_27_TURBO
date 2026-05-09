@@ -1,3 +1,5 @@
+<img width="1024" height="1536" alt="ChatGPT Image May 9, 2026, 09_24_20 AM" src="https://github.com/user-attachments/assets/bf63f242-a0fd-4226-9325-3b70f1f13f77" />
+
 # GA '27 Turbo
 
 A pseudo-3D synthwave arcade racer starring Ron, the iConnections CEO, racing
