@@ -1,0 +1,3384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GA '27 Turbo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #05000f; height: 100%; overflow: hidden; }
+  body {
+    color: #fff;
+    font-family: 'Courier New', ui-monospace, monospace;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, #1a0040 0%, #05000f 70%);
+  }
+  #wrap {
+    position: relative; width: 960px; height: 600px;
+    border: 2px solid #ff2bd6;
+    box-shadow: 0 0 40px #ff2bd6, inset 0 0 20px rgba(255, 43, 214, 0.25);
+    background: #000;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+  .overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,0,30,0.92), rgba(40,0,60,0.92));
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; z-index: 10; padding: 30px;
+  }
+  .overlay.hidden { display: none; }
+  h1 {
+    font-size: 96px; font-weight: 900; letter-spacing: 6px;
+    background: linear-gradient(180deg, #ffffff 0%, #b3eaff 35%, #00aaff 70%, #003a66 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 22px rgba(0,170,255,0.55);
+    margin-bottom: -14px;
+  }
+  h2.turbo {
+    font-size: 64px; color: #ff2bd6; font-style: italic;
+    text-shadow: 0 0 18px #ff2bd6, 0 0 36px #ff2bd6;
+    transform: skewX(-12deg); letter-spacing: 8px; margin-bottom: 20px;
+  }
+  .tagline { color: #ff2bd6; font-size: 13px; letter-spacing: 10px; margin-bottom: 14px; }
+  .blurb {
+    color: #fff; max-width: 580px; font-size: 13px; line-height: 1.7;
+    background: rgba(0,0,0,0.35); padding: 14px 18px; border: 1px solid rgba(255,43,214,0.4);
+  }
+  .blurb b.gold { color: #8CCECE; }   /* sponsor */
+  .blurb b.green { color: #EEDE22; }  /* fund manager */
+  .blurb b.blue { color: #4FB871; }   /* allocator (brightened from #20512C for dark-bg readability) */
+  .controls {
+    color: #67d2ff; font-size: 12px; letter-spacing: 4px; margin-top: 26px;
+    line-height: 1.9;
+  }
+  .key { display: inline-block; padding: 2px 8px; border: 1px solid #67d2ff; border-radius: 4px; margin: 0 4px; }
+  button {
+    background: linear-gradient(180deg, #ff2bd6, #8a0070);
+    color: white; border: 2px solid #ff8de6; padding: 14px 40px;
+    font-size: 18px; font-family: inherit; cursor: pointer; letter-spacing: 6px;
+    margin-top: 22px; box-shadow: 0 0 24px rgba(255,43,214,0.7);
+    transition: transform 0.1s;
+  }
+  button:hover { transform: scale(1.05); }
+  .hud {
+    position: absolute; top: 10px; left: 10px; right: 10px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    z-index: 5; pointer-events: none; font-size: 12px; letter-spacing: 1px;
+  }
+  /* SCORE is far-left and the AI BOOST table is far-right via the flex
+     layout, but SPEED needs to sit in the true horizontal center of the
+     screen regardless of how wide the side blocks are. Pull it out of
+     the flex flow with absolute positioning. */
+  .hud > .hud-block.center {
+    position: absolute; left: 50%; top: 0;
+    transform: translateX(-50%);
+  }
+  .hud-block {
+    background: rgba(0, 0, 0, 0.55); padding: 6px 10px;
+    border: 1px solid rgba(0, 212, 255, 0.55);
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+    color: #67d2ff; min-width: 70px; text-align: center;
+  }
+  .hud-block .label { color: #ff2bd6; font-size: 9px; display: block; letter-spacing: 2px; }
+  .hud-block .value { font-size: 20px; color: #fff; text-shadow: 0 0 6px #67d2ff; }
+  .hud-table {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(0, 212, 255, 0.55);
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+    padding: 8px 12px;
+    display: flex; flex-direction: column; gap: 6px;
+    min-width: 180px;
+  }
+  .hud-table .hud-row {
+    display: flex; align-items: center; gap: 10px;
+    justify-content: space-between;
+  }
+  .hud-table .hud-icon { width: 22px; height: 22px; flex: 0 0 22px; }
+  .hud-table .hud-icon svg { width: 100%; height: 100%; display: block; }
+  .hud-table .hud-icon-ai svg {
+    filter:
+      drop-shadow(0 0 4px #00e5ff)
+      drop-shadow(0 0 7px #c83dff)
+      drop-shadow(0 0 10px rgba(255, 61, 240, 0.55));
+  }
+  .hud-table .hud-label {
+    color: #ff2bd6; font-size: 9px; letter-spacing: 2px;
+    flex: 1; text-align: left;
+  }
+  .hud-table .hud-value {
+    font-size: 18px; color: #fff; text-shadow: 0 0 6px #67d2ff;
+    min-width: 24px; text-align: right;
+  }
+  .leader {
+    position: absolute; top: 84px; left: 10px;
+    background: rgba(0,0,0,0.55); border: 1px solid #ff2bd6;
+    padding: 6px 10px; font-size: 11px; color: #fff; z-index: 5;
+    min-width: 130px;
+  }
+  .leader .row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .leader .you { color: #ffd23f; }
+  .leader .label { color: #ff2bd6; font-size: 9px; letter-spacing: 2px; margin-bottom: 4px; text-align: center; }
+  .toast {
+    position: absolute; left: 50%; top: 36%; transform: translateX(-50%);
+    color: #fff; font-weight: bold; font-size: 24px; letter-spacing: 1px;
+    text-shadow: 0 0 12px #000, 0 0 8px #000, 0 0 6px currentColor;
+    z-index: 6; pointer-events: none; opacity: 0; transition: opacity 0.2s, transform 0.4s;
+  }
+  .end-stat { color: #67d2ff; font-size: 16px; margin: 4px 0; letter-spacing: 2px; }
+  .end-stat span { color: #ffd23f; font-weight: bold; }
+  .badge {
+    display: inline-block; padding: 4px 10px; margin: 4px;
+    background: rgba(255,43,214,0.18); border: 1px solid #ff2bd6; border-radius: 4px;
+    font-size: 12px;
+  }
+  #title h1, #end h1 { line-height: 1; }
+
+  /* ===== Welcome to Miami end screen — beach, palms, iConnections logo ===== */
+  .overlay.miami-end {
+    background:
+      linear-gradient(180deg, transparent 0%, transparent 70%, #f5d39e 70%, #d6a96d 100%),
+      linear-gradient(180deg, transparent 0%, transparent 50%, #2a8eb8 50%, #1a6c95 70%, transparent 70%),
+      linear-gradient(180deg, #ff8488 0%, #ffaa6f 30%, #ffd874 50%, #ffd874 100%);
+    overflow: hidden;
+    padding-top: 130px;
+  }
+  .miami-end .palm {
+    position: absolute; bottom: -10px; height: 360px; width: 220px;
+    z-index: 2; pointer-events: none;
+    filter: drop-shadow(-4px 4px 6px rgba(0,0,0,0.35));
+  }
+  .miami-end .palm-left  { left: -20px; }
+  /* Wave crests — white foam patches that appear, ripple, then travel
+     toward the shore (downward) where they spread, break up into trailing
+     bubbles, and dissipate. CSS custom properties --dur / --delay drive
+     timing on both the crest and its trailing bubble pseudo-elements. */
+  .miami-end .wave-crest {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(225, 240, 255, 0.55) 35%,
+      rgba(180, 220, 250, 0) 78%);
+    filter: blur(1px);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    animation: crest-cycle var(--dur, 5s) ease-out infinite;
+    animation-delay: var(--delay, 0s);
+    will-change: opacity, transform;
+  }
+  /* Two trailing bubbles per crest — small foam ovals that lag behind
+     and travel a bit further toward shore as the crest dissipates. */
+  .miami-end .wave-crest::before,
+  .miami-end .wave-crest::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center,
+      rgba(255, 255, 255, 0.85) 0%,
+      rgba(220, 235, 250, 0.40) 50%,
+      transparent 85%);
+    filter: blur(0.6px);
+    opacity: 0;
+    pointer-events: none;
+    animation-duration: var(--dur, 5s);
+    animation-delay: var(--delay, 0s);
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-out;
+  }
+  .miami-end .wave-crest::before {
+    width: 36%; height: 65%; left: 16%; top: 70%;
+    animation-name: bubble-trail-a;
+  }
+  .miami-end .wave-crest::after {
+    width: 28%; height: 55%; left: 56%; top: 88%;
+    animation-name: bubble-trail-b;
+  }
+  /* Crest cycle. The first ~65% of the cycle is a quiet "rest" period;
+     the actual pop / ripple / travel / dissipate animation only runs
+     across the last 35% of the cycle, played out slowly. */
+  @keyframes crest-cycle {
+    0%, 65% { opacity: 0;    transform: translateY(-2px) scale(0.55, 0.45); }
+    71%     { opacity: 1;    transform: translateY(0)    scale(0.98, 1.00); }
+    77%     { opacity: 0.95; transform: translateY(4px)  scale(1.12, 0.92); }
+    83%     { opacity: 0.85; transform: translateY(12px) scale(1.05, 0.96); }
+    89%     { opacity: 0.65; transform: translateY(22px) scale(1.30, 0.72); }
+    95%     { opacity: 0.30; transform: translateY(36px) scale(1.55, 0.46); }
+    100%    { opacity: 0;    transform: translateY(54px) scale(1.80, 0.22); }
+  }
+  /* Trailing bubble A — emerges as the crest reaches the shore */
+  @keyframes bubble-trail-a {
+    0%, 80% { opacity: 0;    transform: translate(0, 0) scale(0.4); }
+    87%     { opacity: 0.75; transform: translate(-3px, 12px) scale(0.85); }
+    94%     { opacity: 0.45; transform: translate(-7px, 26px) scale(1.10); }
+    100%    { opacity: 0;    transform: translate(-12px, 44px) scale(1.35); }
+  }
+  /* Trailing bubble B — slightly later, drifts right-and-down */
+  @keyframes bubble-trail-b {
+    0%, 84% { opacity: 0;    transform: translate(0, 0) scale(0.35); }
+    91%     { opacity: 0.65; transform: translate(4px, 10px) scale(0.80); }
+    97%     { opacity: 0.35; transform: translate(9px, 24px) scale(1.05); }
+    100%    { opacity: 0;    transform: translate(14px, 42px) scale(1.30); }
+  }
+  /* 12 crests scattered through the ocean band. Cycle durations bumped
+     ~1.6× and delays spread across a wider range so each spot has long
+     gaps between crests and they no longer cluster in time. */
+  .miami-end .wave-crest.c1  { --dur: 22s; --delay:   0s; top: 51%; left:  6%; width:  90px; height: 10px; }
+  .miami-end .wave-crest.c2  { --dur: 28s; --delay:  -5s; top: 53%; left: 22%; width: 130px; height: 14px; }
+  .miami-end .wave-crest.c3  { --dur: 26s; --delay: -11s; top: 56%; left: 16%; width: 110px; height: 12px; }
+  .miami-end .wave-crest.c4  { --dur: 24s; --delay:  -3s; top: 52%; left: 38%; width: 100px; height: 10px; }
+  .miami-end .wave-crest.c5  { --dur: 32s; --delay: -17s; top: 55%; left: 50%; width: 140px; height: 14px; }
+  .miami-end .wave-crest.c6  { --dur: 28s; --delay:  -8s; top: 58%; left: 42%; width: 120px; height: 12px; }
+  .miami-end .wave-crest.c7  { --dur: 22s; --delay: -14s; top: 51%; left: 64%; width:  95px; height: 10px; }
+  .miami-end .wave-crest.c8  { --dur: 28s; --delay: -20s; top: 54%; left: 72%; width: 130px; height: 14px; }
+  .miami-end .wave-crest.c9  { --dur: 26s; --delay:  -6s; top: 57%; left: 60%; width: 105px; height: 11px; }
+  .miami-end .wave-crest.c10 { --dur: 24s; --delay: -12s; top: 52%; left: 82%; width: 110px; height: 12px; }
+  .miami-end .wave-crest.c11 { --dur: 28s; --delay:  -9s; top: 56%; left: 88%; width:  95px; height: 10px; }
+  .miami-end .wave-crest.c12 { --dur: 34s; --delay: -23s; top: 59%; left: 76%; width: 120px; height: 13px; }
+  /* Distant seagulls — small "M" shapes that drift across the sky on
+     bobbing flight paths. Two fly right, one flies left. */
+  .miami-end .seagull {
+    position: absolute; left: 0; pointer-events: none; z-index: 2;
+  }
+  .miami-end .seagull svg { width: 100%; height: 100%; display: block; }
+  .miami-end .seagull.s1 {
+    top: 22%; width: 28px; height: 12px; opacity: 0.55;
+    animation: gull-fly-r 26s linear infinite;
+  }
+  .miami-end .seagull.s2 {
+    top: 14%; width: 20px; height: 9px; opacity: 0.45;
+    animation: gull-fly-l 38s linear infinite;
+    animation-delay: -10s;
+  }
+  .miami-end .seagull.s3 {
+    top: 30%; width: 24px; height: 10px; opacity: 0.50;
+    animation: gull-fly-r 32s linear infinite;
+    animation-delay: -18s;
+  }
+  @keyframes gull-fly-r {
+    0%   { transform: translate(-40px, 0); }
+    25%  { transform: translate(240px, -10px); }
+    50%  { transform: translate(480px, 2px); }
+    75%  { transform: translate(720px, -6px); }
+    100% { transform: translate(1010px, -14px); }
+  }
+  @keyframes gull-fly-l {
+    0%   { transform: translate(1010px, 0) scaleX(-1); }
+    25%  { transform: translate(720px, 8px) scaleX(-1); }
+    50%  { transform: translate(480px, -4px) scaleX(-1); }
+    75%  { transform: translate(240px, 6px) scaleX(-1); }
+    100% { transform: translate(-40px, -2px) scaleX(-1); }
+  }
+  .miami-end .palm-right { right: -20px; transform: scaleX(-1); }
+  .miami-end img.miami-logo {
+    position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+    width: 100px; height: 100px; z-index: 3;
+    filter: drop-shadow(0 0 14px rgba(105, 43, 126, 0.55));
+    display: block;
+  }
+  .miami-end h1 {
+    position: relative; z-index: 3;
+    font-size: 60px; letter-spacing: 4px;
+    background: linear-gradient(180deg, #ffffff 0%, #fff4c2 50%, #ff8488 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 4px 18px rgba(160, 40, 40, 0.45);
+    margin-bottom: 4px;
+  }
+  .miami-end .miami-sub {
+    position: relative; z-index: 3;
+    color: #4a1a40; font-size: 12px; letter-spacing: 6px;
+    margin-bottom: 14px;
+  }
+  .miami-end #endStats { position: relative; z-index: 3; width: 90%; max-width: 640px; }
+  .miami-end button { position: relative; z-index: 3; }
+
+  .leaderboard-table {
+    border-collapse: collapse; margin: 14px auto 8px;
+    background: rgba(15, 5, 30, 0.78);
+    border: 1px solid rgba(255, 215, 100, 0.55);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    color: #fff;
+    font-size: 12px; letter-spacing: 1px;
+    min-width: 540px;
+  }
+  .leaderboard-table th, .leaderboard-table td {
+    padding: 8px 14px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .leaderboard-table th {
+    color: #ffd23f; font-size: 10px; letter-spacing: 3px;
+    background: rgba(0,0,0,0.4);
+  }
+  .leaderboard-table td.racer { text-align: left; font-weight: bold; min-width: 130px; }
+  .leaderboard-table td.final { color: #ffd23f; font-weight: bold; font-size: 14px; }
+  .leaderboard-table tr.first { background: rgba(255, 215, 100, 0.14); }
+  .leaderboard-table tr.first td.final { color: #ffe27f; }
+  .leaderboard-table tr.you { box-shadow: inset 4px 0 0 #ffd23f; }
+
+  .player-haul {
+    margin: 38px auto 4px; text-align: center; position: relative; z-index: 3;
+  }
+  .player-haul .haul-title {
+    color: #4a1a40; font-size: 10px; letter-spacing: 4px;
+    margin-bottom: 8px; font-weight: bold;
+  }
+  .player-haul .haul-row {
+    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+  }
+  .player-haul .haul-pill {
+    background: rgba(255, 255, 255, 0.85);
+    border: 2px solid;
+    padding: 6px 14px; border-radius: 16px;
+    font-size: 12px; letter-spacing: 1px; font-weight: 600;
+  }
+  .player-haul .haul-pill b { font-size: 16px; margin-left: 4px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="960" height="600"></canvas>
+
+  <div class="hud">
+    <div class="hud-block"><span class="label">SCORE</span><span class="value" id="hudScore">0</span></div>
+    <div class="hud-block center"><span class="label">SPEED</span><span class="value" id="hudSpeed">0</span></div>
+    <div class="hud-table">
+      <div class="hud-row">
+        <span class="hud-icon" aria-hidden="true">
+          <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="18" height="18" fill="#0a2424" stroke="#8CCECE" stroke-width="2"/>
+            <text x="11" y="17" text-anchor="middle" font-family="'Courier New', monospace" font-weight="900" font-size="15" fill="#8CCECE">$</text>
+          </svg>
+        </span>
+        <span class="hud-label">SPONSORS</span>
+        <span class="hud-value" id="hudSponsors">0</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-icon" aria-hidden="true">
+          <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 8 5 Q 8 2.5 11 2.5 Q 14 2.5 14 5" fill="none" stroke="#EEDE22" stroke-width="1.5"/>
+            <rect x="3" y="6" width="16" height="13" fill="#3a3208" stroke="#EEDE22" stroke-width="2"/>
+            <text x="11" y="16" text-anchor="middle" font-family="'Courier New', monospace" font-weight="900" font-size="9" fill="#EEDE22">FM</text>
+          </svg>
+        </span>
+        <span class="hud-label">FUND MGRS</span>
+        <span class="hud-value" id="hudFMs">0</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-icon" aria-hidden="true">
+          <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="2,8.5 11,3 20,8.5" fill="#20512C" stroke="#EAE0C4" stroke-width="1.5"/>
+            <rect x="3" y="8.5" width="16" height="10.5" fill="#20512C" stroke="#EAE0C4" stroke-width="1.5"/>
+            <rect x="5.5" y="10.5" width="1.5" height="7" fill="#EAE0C4"/>
+            <rect x="9" y="10.5" width="1.5" height="7" fill="#EAE0C4"/>
+            <rect x="12.5" y="10.5" width="1.5" height="7" fill="#EAE0C4"/>
+            <rect x="16" y="10.5" width="1.5" height="7" fill="#EAE0C4"/>
+          </svg>
+        </span>
+        <span class="hud-label">ALLOCATORS</span>
+        <span class="hud-value" id="hudAllocs">0</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-icon hud-icon-ai" aria-hidden="true">
+          <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+            <!-- Outer cyan flame -->
+            <path d="M 11 2 Q 17 5 17 12 Q 17 18 11 19 Q 5 18 5 12 Q 5 5 11 2 Z" fill="#3ddcff"/>
+            <!-- Inner magenta flame -->
+            <path d="M 11 6 Q 14.6 8 14.6 12 Q 14.6 16 11 17 Q 7.4 16 7.4 12 Q 7.4 8 11 6 Z" fill="#c83dff"/>
+            <!-- White-hot core -->
+            <path d="M 11 9 Q 12.4 10.6 12.4 12.6 Q 12.4 14.8 11 15.4 Q 9.6 14.8 9.6 12.6 Q 9.6 10.6 11 9 Z" fill="#ffffff"/>
+            <!-- Tiny AI sparkle (4-pointed star) -->
+            <path d="M 17 4 L 17.4 5.5 L 19 6 L 17.4 6.5 L 17 8 L 16.6 6.5 L 15 6 L 16.6 5.5 Z" fill="#ffffff"/>
+          </svg>
+        </span>
+        <span class="hud-label">AI BOOST</span>
+        <span class="hud-value" id="hudNitro">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="leader" id="leaderboard">
+    <div class="label">RACE TO MIAMI</div>
+    <div class="row you"><span>RON (YOU)</span><span id="lbRon">0%</span></div>
+    <div class="row"><span style="color:#ff6666">APEXION</span><span id="lbRival1">0%</span></div>
+    <div class="row"><span style="color:#66ffaa">KONNEXXT</span><span id="lbRival2">0%</span></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div id="title" class="overlay">
+    <div class="tagline">RIDE • FUND • WIN • REPEAT</div>
+    <h1>GA '27</h1>
+    <h2 class="turbo">TURBO</h2>
+    <div class="blurb">
+      Ron is racing his motorcycle to <b style="color:#67d2ff">Global Alts Miami</b><br>
+      Collect <b class="gold">sponsors ($)</b>,
+      <b class="green">fund managers (FM)</b>, and <b class="blue">allocators (LP)</b>
+      along the way. Dodge <b style="color:#ff5566">platform outages</b>,
+      <b style="color:#aaaaaa">phishing emails</b>,
+      and <b style="color:#bbcfff">snow storms</b>.<br>
+      Beat the rivals to the finish line.<br>
+      The road to Global Alts is never smooth.
+    </div>
+    <div class="controls">
+      <span class="key">←</span><span class="key">→</span> STEER &nbsp;
+      <span class="key">↑</span> ACCELERATE &nbsp;
+      <span class="key">↓</span> BRAKE &nbsp;
+      <span class="key">SPACE</span> AI BOOST
+    </div>
+    <button id="startBtn">START RACE</button>
+  </div>
+
+  <div id="end" class="overlay miami-end hidden">
+    <!-- Wave crests — appear and disappear at scattered ocean positions -->
+    <div class="wave-crest c1"></div>
+    <div class="wave-crest c2"></div>
+    <div class="wave-crest c3"></div>
+    <div class="wave-crest c4"></div>
+    <div class="wave-crest c5"></div>
+    <div class="wave-crest c6"></div>
+    <div class="wave-crest c7"></div>
+    <div class="wave-crest c8"></div>
+    <div class="wave-crest c9"></div>
+    <div class="wave-crest c10"></div>
+    <div class="wave-crest c11"></div>
+    <div class="wave-crest c12"></div>
+    <!-- Distant seagulls drifting across the sky -->
+    <div class="seagull s1">
+      <svg viewBox="0 0 30 12" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 1 7 Q 6 1 11 7 Q 13 4 15 7 Q 20 1 25 7" stroke="#3a1a40" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="seagull s2">
+      <svg viewBox="0 0 30 12" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 1 7 Q 6 2 11 7 Q 13 5 15 7 Q 20 2 25 7" stroke="#2a1030" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="seagull s3">
+      <svg viewBox="0 0 30 12" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 1 7 Q 6 1 11 7 Q 13 4 15 7 Q 20 1 25 7" stroke="#3a1a40" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <!-- Palm trees flanking the beach -->
+    <svg class="palm palm-left" viewBox="0 0 200 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet">
+      <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
+            stroke="#3a2a14" stroke-width="14" fill="none" stroke-linecap="round"/>
+      <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
+            stroke="#7a5a30" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="3 14" opacity="0.75"/>
+      <circle cx="83" cy="36" r="6" fill="#2a1a0a"/>
+      <circle cx="95" cy="29" r="6" fill="#2a1a0a"/>
+      <circle cx="78" cy="48" r="5" fill="#2a1a0a"/>
+      <g transform="translate(90 22)">
+        <path d="M 0 0 Q 60 -10 105 -25 Q 80 -2 50 -2 Q 20 4 0 0 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 Q -60 -10 -105 -25 Q -80 -2 -50 -2 Q -20 4 0 0 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 Q 65 14 110 32 Q 85 24 50 14 Q 20 6 0 0 Z" fill="#0a5a30"/>
+        <path d="M 0 0 Q -65 14 -110 32 Q -85 24 -50 14 Q -20 6 0 0 Z" fill="#0a5a30"/>
+        <path d="M 0 0 Q 28 -55 38 -90 Q 28 -55 14 -25 Q 5 -8 0 0 Z" fill="#15843d"/>
+        <path d="M 0 0 Q -28 -55 -38 -90 Q -28 -55 -14 -25 Q -5 -8 0 0 Z" fill="#15843d"/>
+        <path d="M 0 0 Q 5 -45 0 -100 Q -3 -75 -5 -45 Q -2 -15 0 0 Z" fill="#11743c"/>
+      </g>
+    </svg>
+    <svg class="palm palm-right" viewBox="0 0 200 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet">
+      <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
+            stroke="#3a2a14" stroke-width="14" fill="none" stroke-linecap="round"/>
+      <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
+            stroke="#7a5a30" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="3 14" opacity="0.75"/>
+      <circle cx="83" cy="36" r="6" fill="#2a1a0a"/>
+      <circle cx="95" cy="29" r="6" fill="#2a1a0a"/>
+      <circle cx="78" cy="48" r="5" fill="#2a1a0a"/>
+      <g transform="translate(90 22)">
+        <path d="M 0 0 Q 60 -10 105 -25 Q 80 -2 50 -2 Q 20 4 0 0 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 Q -60 -10 -105 -25 Q -80 -2 -50 -2 Q -20 4 0 0 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 Q 65 14 110 32 Q 85 24 50 14 Q 20 6 0 0 Z" fill="#0a5a30"/>
+        <path d="M 0 0 Q -65 14 -110 32 Q -85 24 -50 14 Q -20 6 0 0 Z" fill="#0a5a30"/>
+        <path d="M 0 0 Q 28 -55 38 -90 Q 28 -55 14 -25 Q 5 -8 0 0 Z" fill="#15843d"/>
+        <path d="M 0 0 Q -28 -55 -38 -90 Q -28 -55 -14 -25 Q -5 -8 0 0 Z" fill="#15843d"/>
+        <path d="M 0 0 Q 5 -45 0 -100 Q -3 -75 -5 -45 Q -2 -15 0 0 Z" fill="#11743c"/>
+      </g>
+    </svg>
+    <!-- iConnections logo -->
+    <img class="miami-logo" id="endLogo" src="assets/icon_logo.svg" alt="iConnections">
+    <h1 id="endTitle">WELCOME TO MIAMI</h1>
+    <div class="miami-sub">RIDE · FUND · WIN · REPEAT</div>
+    <div id="endStats" style="margin: 14px 0;"></div>
+    <button id="restartBtn">RACE AGAIN</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// =====================================================================
+// CONSTANTS
+// =====================================================================
+const W = 960, H = 600;
+const SEG_LEN = 200;
+const ROAD_WIDTH = 2000;
+const LANES = 3;
+const CAM_HEIGHT = 1000;
+const FOV = 100;
+const CAM_DEPTH = 1 / Math.tan((FOV / 2) * Math.PI / 180);
+const DRAW_DIST = 220;
+const FOG_DENSITY = 4;
+const MAX_SPEED = SEG_LEN * 60;        // ~12000 units/sec
+const ACCEL = MAX_SPEED / 5;
+const BRAKING = -MAX_SPEED;
+const DECEL = -MAX_SPEED / 5;
+const OFFROAD_DECEL = -MAX_SPEED * 0.85;
+const OFFROAD_LIMIT = MAX_SPEED / 6;
+const CENTRIFUGAL = 0.3;
+const TRACK_SEGMENTS = 4500;
+const TRACK_LENGTH = TRACK_SEGMENTS * SEG_LEN;
+const PLAYER_Z = (CAM_HEIGHT * CAM_DEPTH);
+
+// =====================================================================
+// STATE
+// =====================================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let segments = [];
+let rivals = [];
+let player;
+let keys = {};
+let lastTime = 0;
+let gameState = 'title';
+let weatherIntensity = 0;
+let weatherTimer = 0;
+let shake = 0;
+let countdownTimer = 0;
+let lastCountdownLabel = null;   // tracks beat changes so we play the tone once
+// Pre-acceleration timing bonus state
+let preAccelPressTime = null;    // when player first pressed UP after countdown started
+let preAccelGoTime = null;       // performance.now() at the GO! transition
+let preAccelBonusAwarded = false;
+let stars = [];
+let palms = [];
+let fadeIn = 1;
+let buildings = []; // { x, h, w, windows:[[r,c]] }
+let floaters = []; // pickup feedback: rising icon + "+N" points
+
+// =====================================================================
+// UTIL
+// =====================================================================
+const rand = (min, max) => min + Math.random() * (max - min);
+const choose = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const easeIn = (a, b, p) => a + (b - a) * Math.pow(p, 2);
+const exponentialFog = (d, density) => 1 / Math.pow(Math.E, d * d * density);
+const accel = (v, a, dt) => v + (a * dt);
+const interp = (a, b, p) => a + (b - a) * p;
+function increase(start, increment, max) { let r = start + increment; while (r >= max) r -= max; while (r < 0) r += max; return r; }
+
+// =====================================================================
+// PROJECTION
+// =====================================================================
+function project(p, camX, camY, camZ, camDepth, w, h, roadW) {
+  p.camera.x = (p.world.x || 0) - camX;
+  p.camera.y = (p.world.y || 0) - camY;
+  p.camera.z = (p.world.z || 0) - camZ;
+  p.screen.scale = camDepth / Math.max(0.0001, p.camera.z);
+  p.screen.x = Math.round((w / 2) + (p.screen.scale * p.camera.x * w / 2));
+  p.screen.y = Math.round((h / 2) - (p.screen.scale * p.camera.y * h / 2));
+  p.screen.w = Math.round((p.screen.scale * roadW * w / 2));
+}
+
+// =====================================================================
+// TRACK BUILDING
+// =====================================================================
+function lastY() { return segments.length ? segments[segments.length - 1].p2.world.y : 0; }
+
+function addSegment(curve, y) {
+  const n = segments.length;
+  segments.push({
+    index: n,
+    p1: { world: { y: lastY(), z: n * SEG_LEN }, camera: {}, screen: {} },
+    p2: { world: { y: y, z: (n + 1) * SEG_LEN }, camera: {}, screen: {} },
+    curve: curve,
+    sprites: [],
+    color: Math.floor(n / 4) % 2 ? 'DARK' : 'LIGHT'
+  });
+}
+
+function addRoad(enter, hold, leave, curve, y) {
+  const startY = lastY();
+  const endY = startY + (y || 0) * SEG_LEN;
+  const total = enter + hold + leave;
+  for (let i = 0; i < enter; i++) addSegment(easeIn(0, curve, i / enter), easeIn(startY, endY, i / total));
+  for (let i = 0; i < hold;  i++) addSegment(curve,                       easeIn(startY, endY, (enter + i) / total));
+  for (let i = 0; i < leave; i++) addSegment(easeIn(curve, 0, i / leave), easeIn(startY, endY, (enter + hold + i) / total));
+}
+
+function addStraight(n)         { addRoad(n, n, n, 0, 0); }
+function addCurve(n, curve, y)  { addRoad(n, n, n, curve, y); }
+function addHill(n, height)     { addRoad(n, n, n, 0, height); }
+function addLowRollingHills(n, height) {
+  addRoad(n, n, n, 0,  height/2);
+  addRoad(n, n, n, 0, -height);
+  addRoad(n, n, n, 0,  height);
+  addRoad(n, n, n, 0,  0);
+  addRoad(n, n, n, 0,  height/2);
+  addRoad(n, n, n, 0, -height/2);
+}
+function addSCurves() {
+  addRoad(40, 40, 40,  -2, 0);
+  addRoad(40, 40, 40,   3, 1.5);
+  addRoad(50, 50, 50,  -3, -1.5);
+  addRoad(40, 40, 40,   2, 1);
+  addRoad(50, 50, 50,  -2, -1);
+}
+
+function buildTrack() {
+  segments = [];
+  addStraight(60);
+  addLowRollingHills(40, 30);
+  addCurve(80, 2, 0);
+  addStraight(60);
+  addSCurves();
+  addCurve(80, -3, 1.5);
+  addStraight(50);
+  addLowRollingHills(40, 50);
+  addCurve(60, 4, 0);
+  addStraight(50);
+  addSCurves();
+  addCurve(80, -4, -1);
+  addStraight(40);
+  addLowRollingHills(30, 60);
+  addCurve(70, 3, 1);
+  addStraight(30);
+  addSCurves();
+  addCurve(80, -2, -2);
+  addStraight(40);
+  addLowRollingHills(40, 50);
+  addStraight(80);
+  // Pad out to TRACK_SEGMENTS so length is consistent
+  while (segments.length < TRACK_SEGMENTS - 60) addStraight(20);
+  // Last stretch into Miami
+  addStraight(60);
+
+  // Mark start / finish line
+  for (let n = 0; n < 6; n++) segments[n].color = 'START';
+  for (let n = segments.length - 12; n < segments.length; n++) segments[n].color = 'FINISH';
+
+  // Place sprites
+  placeSprites();
+
+  // Re-snap track length
+  // (TRACK_LENGTH constant is approximate; rivals use segments.length)
+}
+
+function placeSprites() {
+  // Items
+  const total = segments.length;
+  // Roadside palm trees & decor (purely visual)
+  for (let i = 20; i < total - 20; i += 2) {
+    const seg = segments[i];
+    if (Math.random() < 0.28) {
+      seg.sprites.push({ kind: 'palm', offset: -1.05 - Math.random() * 0.6 });
+    }
+    if (Math.random() < 0.28) {
+      seg.sprites.push({ kind: 'palm', offset: 1.05 + Math.random() * 0.6 });
+    }
+    if (Math.random() < 0.08) {
+      seg.sprites.push({ kind: 'billboard', offset: (Math.random() < 0.5 ? -1.6 : 1.6) });
+    }
+  }
+
+  // Pickups & hazards on the road (between -0.85 and 0.85 lateral)
+  // Sparser distribution + anti-overlap rule so items never visually stack
+  const MIN_SEG_GAP = 9;        // sprites within this many segments must be far apart laterally
+  const MIN_LATERAL_GAP = 0.55; // half the road width — generous so foreshortening can't stack
+  const recent = [];            // ring buffer of recently-placed road sprites
+  for (let i = 50; i < total - 30; i++) {
+    const seg = segments[i];
+    const stage = i / total;
+    if (Math.random() >= 0.055 + stage * 0.02) continue;
+
+    // Try a few lateral positions before giving up
+    let chosenOffset = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const cand = rand(-0.85, 0.85);
+      let conflict = false;
+      for (const p of recent) {
+        if ((i - p.idx) < MIN_SEG_GAP && Math.abs(cand - p.offset) < MIN_LATERAL_GAP) {
+          conflict = true; break;
+        }
+      }
+      if (!conflict) { chosenOffset = cand; break; }
+    }
+    if (chosenOffset === null) continue; // skip rather than stack
+
+    const r = Math.random();
+    let kind;
+    // 5% nitro + 95% everything else (66/34 pickups/hazards inside that 95%).
+    //   FM        ≈ 40.5%  →  cum 0.405
+    //   Allocator ≈ 20.2%  →  cum 0.607
+    //   Sponsor   ≈  2.0%  →  cum 0.627
+    //   Phishing  ≈ 16.2%  →  cum 0.789
+    //   Outage    ≈  9.7%  →  cum 0.886
+    //   Snow      ≈  6.5%  →  cum 0.950
+    //   Nitro     =  5.0%  →  cum 1.000
+    if (r < 0.405)       kind = 'allocator';
+    else if (r < 0.607)  kind = 'fm';
+    else if (r < 0.627)  kind = 'sponsor';
+    else if (r < 0.789)  kind = 'phishing';
+    else if (r < 0.886)  kind = 'outage';
+    else if (r < 0.950)  kind = 'snow';
+    else                 kind = 'nitro';
+    seg.sprites.push({ kind, offset: chosenOffset, collected: false, hit: false });
+    recent.push({ idx: i, offset: chosenOffset });
+    // Drop entries that are no longer in the look-back window
+    while (recent.length > 0 && (i - recent[0].idx) >= MIN_SEG_GAP) recent.shift();
+  }
+}
+
+// =====================================================================
+// RIVALS
+// =====================================================================
+function spawnRivals() {
+  // Track length is ~900,000 units. To finish in ~155 sec at constant speed:
+  //   needed speed = 900000 / 155 ≈ 5806 units/sec ≈ MAX_SPEED * 0.484
+  // Give Apexion a hair more pace than Konnexxt.
+  rivals = [
+    { name: 'APEXION',  color: '#ff5577', accent: '#ffaa66', x: -0.4, z: 0,
+      // Rivals launch off the line at 60% of MAX_SPEED, then the
+      // recovery code in update() pulls them up to baseSpeed.
+      speed: MAX_SPEED * 0.6, baseSpeed: MAX_SPEED * 0.946,
+      score: 0, hitCool: 0, hazardCool: 0,
+      spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
+      nitroTimer: 0,
+      finishTime: null },
+    { name: 'KONNEXXT', color: '#66ffaa', accent: '#aaffd2', x:  0.4, z: 0,
+      speed: MAX_SPEED * 0.6, baseSpeed: MAX_SPEED * 0.938,
+      score: 0, hitCool: 0, hazardCool: 0,
+      spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
+      nitroTimer: 0,
+      finishTime: null }
+  ];
+}
+
+// =====================================================================
+// PLAYER
+// =====================================================================
+function resetPlayer() {
+  player = {
+    x: 0,           // -1..1
+    z: 0,           // along track in world units
+    speed: 0,
+    lives: 3,
+    score: 0,
+    sponsors: 0,
+    fms: 0,
+    allocs: 0,
+    boost: 0,           // 0..3 (charges)
+    boostTimer: 0,      // seconds remaining
+    hitTimer: 0,        // invuln after hit
+    spinoutTimer: 0,    // seconds remaining of spinout animation
+    spinoutMax: 0,      // total duration of current spinout
+    spinoutTotal: 0,    // total radians to rotate (signed)
+    spinoutAngle: 0,    // current rotation
+    finished: false,
+    finishTime: null,
+    startTime: performance.now()
+  };
+}
+
+// =====================================================================
+// MUSIC — Top Gear / Miami Vice Nights inspired synthwave loop, generated
+// procedurally with the Web Audio API so we don't need any audio assets.
+//   • 124 BPM, 32-bar form: A · A · B · B · Bridge · Bridge · A · A.
+//   • A SECTION   (verse, bars 0-3, 4-7, 24-27, 28-31): kick / snare /
+//     hat / sawtooth bass arpeggio / square-wave lead riff / sustained
+//     pad chord, over Am · F · C · G.
+//   • B SECTION   (chorus, bars 8-11 and 12-15): everything in A plus a
+//     layered clap on 2 & 4, an 8th-note ride cymbal, and a 16th-note
+//     square-wave arp outlining each chord.
+//   • BRIDGE      (bars 16-19 and 20-23): contrasting Dm · G · Em · Am —
+//     fully diatonic to A natural minor / C major so it stays consonant
+//     with the rest of the song. Played twice. Same drum + bass density
+//     as the verse for a smooth section change. Resolves to Am which
+//     leads naturally back into the final A return.
+// =====================================================================
+let musicCtx = null;
+let musicMaster = null;
+let musicTimer = null;
+let musicNextTime = 0;
+let musicStep = 0;
+
+const MUSIC_BPM = 124;
+const MUSIC_SIXTEENTH = 60 / MUSIC_BPM / 4; // seconds per 16th
+const MUSIC_BARS = 32;                      // A·A·B·B·Bridge·Bridge·A·A, 4 bars each
+const MUSIC_STEPS = MUSIC_BARS * 16;
+
+// Frequencies (Hz) — A2..D5 picked by ear for synthwave warmth
+const M_F = {
+  A2: 110.00, B2: 123.47, C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00,
+  A3: 220.00, B3: 246.94, C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00,
+  A4: 440.00, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00,
+  B5: 987.77, C6: 1046.50, D6: 1174.66, E6: 1318.51, F6: 1396.91, A6: 1760.00,
+  F2: 87.31,  C2: 65.41,  G2: 98.00
+};
+
+// Per-bar chord (Am, F, C, G) — used by A and B sections
+const M_CHORD_ROOT  = [M_F.A2, M_F.F2, M_F.C2, M_F.G2];
+const M_CHORD_THIRD = [M_F.C3, M_F.A2, M_F.E3, M_F.B2];
+const M_CHORD_FIFTH = [M_F.E3, M_F.C3, M_F.G3, M_F.D3];
+
+// Lead melody for A and B — 4 quarter-notes per bar. Catchy, descending.
+const M_LEAD = [
+  [M_F.A4, M_F.E5, M_F.A5, M_F.E5],   // Am
+  [M_F.F4, M_F.A4, M_F.C5, M_F.F5],   // F
+  [M_F.E4, M_F.G4, M_F.C5, M_F.G4],   // C
+  [M_F.D4, M_F.G4, M_F.B4, M_F.D5]    // G
+];
+
+// Bridge progression: Dm · G · Em · Am — fully diatonic to A natural minor /
+// C major (no chromatic notes, so it sits comfortably alongside the verse
+// progression). Resolves to Am, which is the chord A1 starts on, so the
+// loop wraps cleanly back to the top.
+const D2 = 73.42, E2 = 82.41, B3 = 246.94;
+const M_BRIDGE_ROOT  = [D2,      M_F.G2,   E2,       M_F.A2];
+const M_BRIDGE_THIRD = [M_F.F3,  M_F.B2,   M_F.G3,   M_F.C3];
+const M_BRIDGE_FIFTH = [M_F.A3,  M_F.D3,   B3,       M_F.E3];
+// Bridge lead — four quarter notes per bar, all chord tones in C major /
+// A minor scale so nothing clashes with the rest of the song.
+const M_BRIDGE_LEAD = [
+  [M_F.D5, M_F.F5, M_F.A5, M_F.F5],   // Dm  (D-F-A)
+  [M_F.G4, M_F.B4, M_F.D5, M_F.G5],   // G   (G-B-D)
+  [M_F.E5, M_F.G5, M_F.E5, M_F.B4],   // Em  (E-G-B)
+  [M_F.A4, M_F.C5, M_F.E5, M_F.A5]    // Am  (A-C-E)
+];
+// Climax variant — only the last bar of Bridge2 (bar 23) uses this. Same
+// Am chord, but the lead arpeggiates up an octave higher and resolves on
+// E6 for a pre-verse lift.
+const M_BRIDGE_CLIMAX_LEAD = [M_F.A4, M_F.E5, M_F.A5, M_F.E6];
+
+function startMusic() {
+  if (musicCtx) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    musicCtx = new Ctx();
+  } catch (e) { return; }
+  // Master mix — soft compression-feel via low ceiling, plus high-shelf
+  musicMaster = musicCtx.createGain();
+  musicMaster.gain.value = 0.22;
+  const hi = musicCtx.createBiquadFilter();
+  hi.type = 'highshelf';
+  hi.frequency.value = 4500;
+  hi.gain.value = 2;
+  musicMaster.connect(hi);
+  hi.connect(musicCtx.destination);
+
+  // Kick off the scheduling loop
+  musicNextTime = musicCtx.currentTime + 0.05;
+  musicStep = 0;
+  musicScheduleTick();
+}
+
+function stopMusic() {
+  if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+  if (musicCtx) {
+    const ctx = musicCtx;
+    const master = musicMaster;
+    musicCtx = null;
+    musicMaster = null;
+    // Quick fade-out to avoid clicks
+    try {
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+    } catch (e) {}
+    setTimeout(() => { try { ctx.close(); } catch (e) {} }, 220);
+  }
+}
+
+function musicScheduleTick() {
+  if (!musicCtx) return;
+  const lookahead = 0.12; // seconds to schedule ahead
+  while (musicNextTime < musicCtx.currentTime + lookahead) {
+    musicPlayStep(musicStep, musicNextTime);
+    musicNextTime += MUSIC_SIXTEENTH;
+    musicStep = (musicStep + 1) % MUSIC_STEPS;
+  }
+  musicTimer = setTimeout(musicScheduleTick, 25);
+}
+
+function musicPlayStep(step, t) {
+  const stepInBar = step % 16;
+  const bar = Math.floor(step / 16) % MUSIC_BARS;
+
+  // Sequence: A1(0-3) · A2(4-7) · B1(8-11) · B2(12-15)
+  //         · Bridge1(16-19) · Bridge2(20-23) · A3(24-27) · A4(28-31)
+  const inA1     = bar < 4;
+  const inA2     = bar >= 4  && bar < 8;
+  const inB1     = bar >= 8  && bar < 12;
+  const inB2     = bar >= 12 && bar < 16;
+  const inBR1    = bar >= 16 && bar < 20;
+  const inBR2    = bar >= 20 && bar < 24;
+  const inA3     = bar >= 24 && bar < 28;
+  const inA4     = bar >= 28 && bar < 32;
+  const inBridge = inBR1 || inBR2;
+  const isBSection = inB1 || inB2;
+
+  const isLastBarOfA2  = bar === 7;
+  const isLastBarOfB2  = bar === 15;
+  const isLastBarOfBR2 = bar === 23;
+  const isLastBarOfA4  = bar === 31;
+
+  // Chord lookup — bridge progression repeats once across BR1 + BR2
+  let root, third, fifth;
+  if (inBridge) {
+    const i = (bar - 16) % 4;
+    root  = M_BRIDGE_ROOT[i];
+    third = M_BRIDGE_THIRD[i];
+    fifth = M_BRIDGE_FIFTH[i];
+  } else {
+    const i = bar % 4;
+    root  = M_CHORD_ROOT[i];
+    third = M_CHORD_THIRD[i];
+    fifth = M_CHORD_FIFTH[i];
+  }
+
+  // ---- Always-on layers (same density across all sections) ----
+  if (stepInBar % 4 === 0) musicKick(t);
+  if (stepInBar === 4 || stepInBar === 12) musicSnare(t);
+  if (stepInBar % 2 === 1) musicHat(t, stepInBar === 15);
+
+  // Bass — 8th-note arpeggio pattern through every section
+  if (stepInBar % 2 === 0) {
+    const beat = stepInBar / 2;
+    const pattern = [root, root, fifth, root * 2, root, root, fifth, root * 2];
+    musicBass(pattern[beat], t, MUSIC_SIXTEENTH * 1.6);
+  }
+
+  // Lead — quarter notes per bar; bridge uses its own melody, and the
+  // very last bar of Bridge2 (bar 23) climaxes higher to set up A3.
+  if (stepInBar % 4 === 0) {
+    const beat = stepInBar / 4;
+    if (!(bar === 0 && beat === 0)) {
+      let leadNote;
+      if (bar === 23) {
+        leadNote = M_BRIDGE_CLIMAX_LEAD[beat];
+      } else if (inBridge) {
+        leadNote = M_BRIDGE_LEAD[(bar - 16) % 4][beat];
+      } else {
+        leadNote = M_LEAD[bar % 4][beat];
+      }
+      musicLead(leadNote, t, MUSIC_SIXTEENTH * 3.6);
+    }
+  }
+
+  // Pad — sustained sawtooth chord on every downbeat
+  if (stepInBar === 0) {
+    musicPad([root * 2, third * 2, fifth * 2], t, MUSIC_SIXTEENTH * 16 * 0.96);
+  }
+
+  // ---- B section extras: clap + ride cymbal + 16th-note arp ----
+  if (isBSection) {
+    if (stepInBar === 4 || stepInBar === 12) musicClap(t);
+    if (stepInBar % 2 === 0) musicRide(t);
+    const arp = [
+      root * 2, third * 2, fifth * 2, root * 4,
+      fifth * 2, third * 2, fifth * 2, root * 4,
+      third * 2, fifth * 2, root * 4, fifth * 2,
+      third * 2, root * 2, fifth * 2, third * 2
+    ];
+    musicArp(arp[stepInBar], t, MUSIC_SIXTEENTH * 0.95);
+  }
+
+  // ---- Transitions ----
+  // Tom fill at end of A2 leads into B1
+  if (isLastBarOfA2 && stepInBar >= 12) musicTom(t, stepInBar);
+  // Crash on B1 downbeat (chorus drops)
+  if (bar === 8 && stepInBar === 0) musicCrash(t);
+  // Tom fill at end of B2 leads into the bridge
+  if (isLastBarOfB2 && stepInBar >= 12) musicTom(t, stepInBar);
+  // Soft crash on the bridge downbeat marks the harmonic shift
+  if (bar === 16 && stepInBar === 0) musicCrash(t);
+  // Tom fill at end of Bridge2 leads back into A3
+  if (isLastBarOfBR2 && stepInBar >= 12) musicTom(t, stepInBar);
+  // Crash on A3 downbeat marks the verse return
+  if (bar === 24 && stepInBar === 0) musicCrash(t);
+  // Denser tom fill closes A4, kicking the loop back to A1
+  if (isLastBarOfA4 && stepInBar >= 12) musicTom(t, stepInBar);
+}
+
+// ---- Extra B-section voices ----
+
+function musicClap(t) {
+  if (!musicCtx) return;
+  // Two quick noise bursts (classic clap "smear")
+  for (let i = 0; i < 2; i++) {
+    const tt = t + i * 0.012;
+    const buf = musicCtx.createBuffer(1, 2200, musicCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+    const src = musicCtx.createBufferSource(); src.buffer = buf;
+    const hp = musicCtx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1800;
+    const lp = musicCtx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 4500;
+    const g = musicCtx.createGain();
+    g.gain.setValueAtTime(0.20, tt);
+    g.gain.exponentialRampToValueAtTime(0.001, tt + 0.05);
+    src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(musicMaster);
+    src.start(tt);
+  }
+}
+
+function musicRide(t) {
+  if (!musicCtx) return;
+  const buf = musicCtx.createBuffer(1, Math.floor(musicCtx.sampleRate * 0.05), musicCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+  const src = musicCtx.createBufferSource(); src.buffer = buf;
+  const hp = musicCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 5500;
+  const bp = musicCtx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 9000; bp.Q.value = 6;
+  const g = musicCtx.createGain();
+  g.gain.setValueAtTime(0.07, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(musicMaster);
+  src.start(t);
+}
+
+function musicArp(freq, t, dur) {
+  if (!musicCtx) return;
+  const o = musicCtx.createOscillator();
+  o.type = 'square';
+  o.frequency.value = freq;
+  o.detune.value = -3;
+  const f = musicCtx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 2900; f.Q.value = 1;
+  const g = musicCtx.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(0.075, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(f); f.connect(g); g.connect(musicMaster);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+function musicTom(t, step) {
+  if (!musicCtx) return;
+  // Descending tom fill — pitch lowers across the four 16ths of the last beat
+  const pitches = { 12: 220, 13: 196, 14: 175, 15: 156 };
+  const pitch = pitches[step] || 200;
+  const o = musicCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(pitch, t);
+  o.frequency.exponentialRampToValueAtTime(pitch * 0.55, t + 0.12);
+  // Subtle noise body to give the tom some attack
+  const buf = musicCtx.createBuffer(1, 1500, musicCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+  const src = musicCtx.createBufferSource(); src.buffer = buf;
+  const hp = musicCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 200;
+  const ng = musicCtx.createGain();
+  ng.gain.setValueAtTime(0.10, t);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  src.connect(hp); hp.connect(ng); ng.connect(musicMaster);
+  src.start(t);
+  // Tonal body
+  const g = musicCtx.createGain();
+  g.gain.setValueAtTime(0.32, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  o.connect(g); g.connect(musicMaster);
+  o.start(t); o.stop(t + 0.20);
+}
+
+// Simple square-wave beep used by the countdown stoplight.
+// Routes through musicMaster if the music engine is up; otherwise it spins
+// up a tiny one-shot AudioContext just for this tone.
+function musicTone(freq, dur, peakGain) {
+  let ctx = musicCtx;
+  let dest = musicMaster;
+  let oneShot = null;
+  if (!ctx) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      oneShot = new Ctx();
+      ctx = oneShot;
+      dest = ctx.destination;
+    } catch (e) { return; }
+  }
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  o.type = 'square';
+  o.frequency.value = freq;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(peakGain != null ? peakGain : 0.28, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(dest);
+  o.start(t); o.stop(t + dur + 0.05);
+  if (oneShot) setTimeout(() => { try { oneShot.close(); } catch (e) {} }, (dur + 0.2) * 1000);
+}
+
+function musicCrash(t) {
+  if (!musicCtx) return;
+  const len = 0.9;
+  const buf = musicCtx.createBuffer(1, Math.floor(musicCtx.sampleRate * len), musicCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let k = 0; k < d.length; k++) {
+    // Slight decay envelope baked into the buffer for shimmer
+    d[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / d.length, 0.7);
+  }
+  const src = musicCtx.createBufferSource(); src.buffer = buf;
+  const hp = musicCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 4500;
+  const g = musicCtx.createGain();
+  g.gain.setValueAtTime(0.32, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + len);
+  src.connect(hp); hp.connect(g); g.connect(musicMaster);
+  src.start(t);
+}
+
+// =====================================================================
+// END-SCREEN MUSIC — a calmer, Chrono-Trigger-ish "idyllic hometown" loop
+// for the Welcome to Miami screen. C major progression, soft bell lead,
+// sustained pad, gentle triangle arp, hushed kick on every downbeat. On
+// top of the music we fire periodic beach waves (filtered noise swells)
+// and the occasional seagull chirp (descending sine + triangle pitch
+// glides) to sell the beach setting.
+// =====================================================================
+let endMusicCtx = null;
+let endMusicMaster = null;
+let endMusicTimer = null;
+let endMusicNextTime = 0;
+let endMusicStep = 0;
+let endSfxTimers = [];
+
+const END_BPM = 76;
+const END_SIXTEENTH = 60 / END_BPM / 4;
+const END_BARS = 8;
+const END_STEPS = END_BARS * 16;
+
+// Progression: C · G · Am · F · C · G · F · C (8 bars)
+const END_ROOT  = [M_F.C2, M_F.G2, M_F.A2, M_F.F2, M_F.C2, M_F.G2, M_F.F2, M_F.C2];
+const END_THIRD = [M_F.E3, M_F.B2, M_F.C3, M_F.A2, M_F.E3, M_F.B2, M_F.A2, M_F.E3];
+const END_FIFTH = [M_F.G3, M_F.D3, M_F.E3, M_F.C3, M_F.G3, M_F.D3, M_F.C3, M_F.G3];
+const END_LEAD  = [
+  [M_F.G4, M_F.C5, M_F.E5, M_F.G5],   // C
+  [M_F.G4, M_F.B4, M_F.D5, M_F.G5],   // G
+  [M_F.A4, M_F.C5, M_F.E5, M_F.C5],   // Am
+  [M_F.F4, M_F.A4, M_F.C5, M_F.A4],   // F
+  [M_F.C5, M_F.E5, M_F.G5, M_F.E5],   // C
+  [M_F.B4, M_F.D5, M_F.G5, M_F.D5],   // G
+  [M_F.A4, M_F.F5, M_F.A4, M_F.C5],   // F
+  [M_F.E5, M_F.G5, M_F.C5, M_F.E5]    // C resolve
+];
+
+function startEndMusic() {
+  if (endMusicCtx) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    endMusicCtx = new Ctx();
+  } catch (e) { return; }
+  endMusicMaster = endMusicCtx.createGain();
+  endMusicMaster.gain.value = 0.0;
+  // Soft fade-in so the end screen swells in instead of slamming
+  endMusicMaster.gain.linearRampToValueAtTime(0.20, endMusicCtx.currentTime + 0.6);
+  // Mild high-shelf for shimmer
+  const hi = endMusicCtx.createBiquadFilter();
+  hi.type = 'highshelf'; hi.frequency.value = 4000; hi.gain.value = 1.5;
+  endMusicMaster.connect(hi);
+  hi.connect(endMusicCtx.destination);
+
+  endMusicNextTime = endMusicCtx.currentTime + 0.05;
+  endMusicStep = 0;
+  endMusicSchedule();
+  // Beach atmosphere
+  scheduleBeachWave(2.5);
+  scheduleSeagulls();
+}
+
+function stopEndMusic() {
+  if (endMusicTimer) { clearTimeout(endMusicTimer); endMusicTimer = null; }
+  for (const tm of endSfxTimers) clearTimeout(tm);
+  endSfxTimers = [];
+  if (endMusicCtx) {
+    const ctx = endMusicCtx;
+    const master = endMusicMaster;
+    endMusicCtx = null;
+    endMusicMaster = null;
+    try {
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+    } catch (e) {}
+    setTimeout(() => { try { ctx.close(); } catch (e) {} }, 400);
+  }
+}
+
+function endMusicSchedule() {
+  if (!endMusicCtx) return;
+  const lookahead = 0.18;
+  while (endMusicNextTime < endMusicCtx.currentTime + lookahead) {
+    endMusicPlayStep(endMusicStep, endMusicNextTime);
+    endMusicNextTime += END_SIXTEENTH;
+    endMusicStep = (endMusicStep + 1) % END_STEPS;
+  }
+  endMusicTimer = setTimeout(endMusicSchedule, 30);
+}
+
+function endMusicPlayStep(step, t) {
+  const stepInBar = step % 16;
+  const bar = Math.floor(step / 16) % END_BARS;
+  const root  = END_ROOT[bar];
+  const third = END_THIRD[bar];
+  const fifth = END_FIFTH[bar];
+
+  // Hushed kick on every downbeat — feels like a slow heartbeat
+  if (stepInBar === 0) endSoftKick(t);
+  // Subtle shaker tick on beats 2 and 4
+  if (stepInBar === 4 || stepInBar === 12) endShaker(t);
+
+  // Sustained pad chord on the bar's downbeat
+  if (stepInBar === 0) {
+    endPad([root * 2, third * 2, fifth * 2], t, END_SIXTEENTH * 16 * 0.96);
+  }
+
+  // Bell lead — quarter notes, four per bar
+  if (stepInBar % 4 === 0) {
+    const beat = stepInBar / 4;
+    endBell(END_LEAD[bar][beat], t, END_SIXTEENTH * 4);
+  }
+
+  // Triangle-wave arp — gentle 8th-note motion outlining the chord
+  if (stepInBar % 2 === 0) {
+    const beat = stepInBar / 2;
+    const arp = [root * 4, third * 4, fifth * 4, third * 4,
+                 root * 4, fifth * 4, third * 4, fifth * 4];
+    endArp(arp[beat], t, END_SIXTEENTH * 1.7);
+  }
+}
+
+function endSoftKick(t) {
+  if (!endMusicCtx) return;
+  const o = endMusicCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(110, t);
+  o.frequency.exponentialRampToValueAtTime(45, t + 0.13);
+  const g = endMusicCtx.createGain();
+  g.gain.setValueAtTime(0.32, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  o.connect(g); g.connect(endMusicMaster);
+  o.start(t); o.stop(t + 0.32);
+}
+
+function endShaker(t) {
+  if (!endMusicCtx) return;
+  const len = 0.04;
+  const buf = endMusicCtx.createBuffer(1, Math.floor(endMusicCtx.sampleRate * len), endMusicCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = endMusicCtx.createBufferSource(); src.buffer = buf;
+  const hp = endMusicCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 6500;
+  const g = endMusicCtx.createGain();
+  g.gain.setValueAtTime(0.05, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + len);
+  src.connect(hp); hp.connect(g); g.connect(endMusicMaster);
+  src.start(t);
+}
+
+function endBell(freq, t, dur) {
+  if (!endMusicCtx) return;
+  // Sine fundamental + sine octave for a warm bell timbre
+  const o = endMusicCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  const g = endMusicCtx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.18, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(endMusicMaster);
+  o.start(t); o.stop(t + dur + 0.05);
+
+  const o2 = endMusicCtx.createOscillator();
+  o2.type = 'sine';
+  o2.frequency.value = freq * 2;
+  const g2 = endMusicCtx.createGain();
+  g2.gain.setValueAtTime(0, t);
+  g2.gain.linearRampToValueAtTime(0.05, t + 0.012);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.55);
+  o2.connect(g2); g2.connect(endMusicMaster);
+  o2.start(t); o2.stop(t + dur * 0.55 + 0.05);
+}
+
+function endArp(freq, t, dur) {
+  if (!endMusicCtx) return;
+  const o = endMusicCtx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.value = freq;
+  const g = endMusicCtx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.06, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(endMusicMaster);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+
+function endPad(freqs, t, dur) {
+  if (!endMusicCtx) return;
+  const mix = endMusicCtx.createGain();
+  mix.gain.setValueAtTime(0, t);
+  mix.gain.linearRampToValueAtTime(0.10, t + 0.7);
+  mix.gain.linearRampToValueAtTime(0.08, t + dur * 0.7);
+  mix.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  const f = endMusicCtx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 1300; f.Q.value = 0.7;
+  for (const fr of freqs) {
+    const o = endMusicCtx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = fr;
+    o.detune.value = (Math.random() - 0.5) * 12;
+    o.connect(f);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  f.connect(mix); mix.connect(endMusicMaster);
+}
+
+// ---- Beach atmosphere SFX ----
+
+function scheduleBeachWave(initialDelayS) {
+  if (!endMusicCtx) return;
+  const firstAt = endMusicCtx.currentTime + (initialDelayS || 0);
+  endWave(firstAt);
+  // Next wave fires 9-14 seconds later
+  const nextMs = (9 + Math.random() * 5) * 1000;
+  const tm = setTimeout(() => {
+    endSfxTimers = endSfxTimers.filter(x => x !== tm);
+    scheduleBeachWave(0);
+  }, nextMs);
+  endSfxTimers.push(tm);
+}
+
+function endWave(t) {
+  if (!endMusicCtx) return;
+  const len = 5.0;
+  const buf = endMusicCtx.createBuffer(1, Math.floor(endMusicCtx.sampleRate * len), endMusicCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  // Pink-ish noise via a simple low-pass IIR on white noise
+  let last = 0;
+  for (let i = 0; i < d.length; i++) {
+    last = last * 0.985 + (Math.random() * 2 - 1) * 0.015;
+    d[i] = last * 5;
+  }
+  const src = endMusicCtx.createBufferSource(); src.buffer = buf;
+  const lp = endMusicCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(260, t);
+  lp.frequency.linearRampToValueAtTime(900, t + 1.6);
+  lp.frequency.linearRampToValueAtTime(220, t + 4.6);
+  lp.Q.value = 1.2;
+  const g = endMusicCtx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.14, t + 1.6);
+  g.gain.linearRampToValueAtTime(0.05, t + 3.0);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 4.6);
+  src.connect(lp); lp.connect(g); g.connect(endMusicMaster);
+  src.start(t);
+}
+
+function scheduleSeagulls() {
+  if (!endMusicCtx) return;
+  const wait = (5 + Math.random() * 8) * 1000;
+  const tm = setTimeout(() => {
+    endSfxTimers = endSfxTimers.filter(x => x !== tm);
+    if (!endMusicCtx) return;
+    endSeagull(endMusicCtx.currentTime);
+    if (Math.random() < 0.45) {
+      const tm2 = setTimeout(() => {
+        if (endMusicCtx) endSeagull(endMusicCtx.currentTime);
+      }, 200 + Math.random() * 380);
+      endSfxTimers.push(tm2);
+    }
+    scheduleSeagulls();
+  }, wait);
+  endSfxTimers.push(tm);
+}
+
+function endSeagull(t) {
+  if (!endMusicCtx) return;
+  const startFreq = 900 + Math.random() * 700;
+  const endFreq   = startFreq * (0.55 + Math.random() * 0.15);
+  const o1 = endMusicCtx.createOscillator();
+  o1.type = 'sine';
+  o1.frequency.setValueAtTime(startFreq, t);
+  o1.frequency.exponentialRampToValueAtTime(endFreq, t + 0.20);
+  const o2 = endMusicCtx.createOscillator();
+  o2.type = 'triangle';
+  o2.frequency.setValueAtTime(startFreq * 1.5, t);
+  o2.frequency.exponentialRampToValueAtTime(endFreq * 1.3, t + 0.20);
+  const g = endMusicCtx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.07, t + 0.025);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  o1.connect(g); o2.connect(g); g.connect(endMusicMaster);
+  o1.start(t); o1.stop(t + 0.25);
+  o2.start(t); o2.stop(t + 0.25);
+}
+
+function musicKick(t) {
+  if (!musicCtx) return;
+  const o = musicCtx.createOscillator();
+  const g = musicCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(160, t);
+  o.frequency.exponentialRampToValueAtTime(42, t + 0.10);
+  g.gain.setValueAtTime(0.85, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  o.connect(g); g.connect(musicMaster);
+  o.start(t); o.stop(t + 0.20);
+}
+
+function musicSnare(t) {
+  if (!musicCtx) return;
+  // Noise burst
+  const buf = musicCtx.createBuffer(1, 4410, musicCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = musicCtx.createBufferSource(); src.buffer = buf;
+  const hp = musicCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 1200;
+  const g = musicCtx.createGain();
+  g.gain.setValueAtTime(0.45, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  src.connect(hp); hp.connect(g); g.connect(musicMaster);
+  src.start(t);
+  // Tonal body
+  const o = musicCtx.createOscillator();
+  o.type = 'triangle'; o.frequency.value = 200;
+  const g2 = musicCtx.createGain();
+  g2.gain.setValueAtTime(0.18, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  o.connect(g2); g2.connect(musicMaster);
+  o.start(t); o.stop(t + 0.08);
+}
+
+function musicHat(t, open) {
+  if (!musicCtx) return;
+  const len = open ? 0.10 : 0.035;
+  const buf = musicCtx.createBuffer(1, Math.floor(musicCtx.sampleRate * len), musicCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = musicCtx.createBufferSource(); src.buffer = buf;
+  const hp = musicCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 7500;
+  const g = musicCtx.createGain();
+  g.gain.setValueAtTime(open ? 0.14 : 0.10, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + len);
+  src.connect(hp); hp.connect(g); g.connect(musicMaster);
+  src.start(t);
+}
+
+function musicBass(freq, t, dur) {
+  if (!musicCtx) return;
+  const o = musicCtx.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.value = freq;
+  const f = musicCtx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(1800, t);
+  f.frequency.exponentialRampToValueAtTime(280, t + dur * 0.85);
+  f.Q.value = 6;
+  const g = musicCtx.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(0.32, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(f); f.connect(g); g.connect(musicMaster);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+function musicLead(freq, t, dur) {
+  if (!musicCtx) return;
+  // Two slightly detuned square oscillators for a chorused chiptune lead
+  const mix = musicCtx.createGain();
+  mix.gain.setValueAtTime(0.0, t);
+  mix.gain.linearRampToValueAtTime(0.16, t + 0.015);
+  mix.gain.linearRampToValueAtTime(0.10, t + dur * 0.4);
+  mix.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  const f = musicCtx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 2400; f.Q.value = 1.5;
+  for (const detune of [0, 8]) {
+    const o = musicCtx.createOscillator();
+    o.type = 'square';
+    o.frequency.value = freq;
+    o.detune.value = detune;
+    o.connect(f);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  f.connect(mix); mix.connect(musicMaster);
+}
+
+function musicPad(freqs, t, dur) {
+  if (!musicCtx) return;
+  const mix = musicCtx.createGain();
+  mix.gain.setValueAtTime(0.0, t);
+  mix.gain.linearRampToValueAtTime(0.07, t + 0.4);
+  mix.gain.linearRampToValueAtTime(0.06, t + dur * 0.7);
+  mix.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  const f = musicCtx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 1600; f.Q.value = 0.8;
+  for (const fr of freqs) {
+    const o = musicCtx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = fr;
+    o.detune.value = (Math.random() - 0.5) * 14;
+    o.connect(f);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  f.connect(mix); mix.connect(musicMaster);
+}
+
+// =====================================================================
+// GAME LIFECYCLE
+// =====================================================================
+function startGame() {
+  buildTrack();
+  spawnRivals();
+  resetPlayer();
+  weatherIntensity = 0;
+  weatherTimer = rand(8, 18);
+  shake = 0;
+  fadeIn = 1;
+  floaters = [];
+  countdownTimer = 3.6; // 3 ... 2 ... 1 ... GO!
+  lastCountdownLabel = null;
+  preAccelPressTime = null;
+  preAccelGoTime = null;
+  preAccelBonusAwarded = false;
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('end').classList.add('hidden');
+  gameState = 'countdown';
+  lastTime = performance.now();
+  // Reset music for a clean restart, then kick it off in time with the countdown
+  stopMusic();
+  stopEndMusic();
+  startMusic();
+  requestAnimationFrame(loop);
+}
+
+function getIconnectionsLogoSVG(size) {
+  // Returns an SVG string of the iConnections mark — 8 person-figures around
+  // a central hole. Used in the Welcome to Miami end screen.
+  const r_inner   = size * 0.20;
+  const r_outer   = size * 0.40;
+  const r_head_c  = size * 0.46;
+  const r_head    = size * 0.085;
+  const arms      = 8;
+  const stepDeg   = 360 / arms;
+  const wedgeHalf = stepDeg * 0.40;
+  let body = '';
+  for (let i = 0; i < arms; i++) {
+    const angDeg = i * stepDeg - 90;
+    const a1 = (angDeg - wedgeHalf) * Math.PI / 180;
+    const a2 = (angDeg + wedgeHalf) * Math.PI / 180;
+    const x1o = (Math.cos(a1) * r_outer).toFixed(2);
+    const y1o = (Math.sin(a1) * r_outer).toFixed(2);
+    const x2o = (Math.cos(a2) * r_outer).toFixed(2);
+    const y2o = (Math.sin(a2) * r_outer).toFixed(2);
+    const x2i = (Math.cos(a2) * r_inner).toFixed(2);
+    const y2i = (Math.sin(a2) * r_inner).toFixed(2);
+    const x1i = (Math.cos(a1) * r_inner).toFixed(2);
+    const y1i = (Math.sin(a1) * r_inner).toFixed(2);
+    body += `<path d="M ${x1o} ${y1o} A ${r_outer} ${r_outer} 0 0 1 ${x2o} ${y2o} L ${x2i} ${y2i} A ${r_inner} ${r_inner} 0 0 0 ${x1i} ${y1i} Z" fill="#5a1d8e"/>`;
+    const headAng = angDeg * Math.PI / 180;
+    const hx = (Math.cos(headAng) * r_head_c).toFixed(2);
+    const hy = (Math.sin(headAng) * r_head_c).toFixed(2);
+    body += `<circle cx="${hx}" cy="${hy}" r="${r_head}" fill="#5a1d8e"/>`;
+  }
+  const half = size * 0.55;
+  return `<svg viewBox="${-half} ${-half} ${size * 1.1} ${size * 1.1}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+}
+
+function endGame() {
+  // The race only ends when the player crosses the finish line. We then
+  // freeze every racer's score using a TIME-BASED penalty:
+  //
+  //   • The first racer to cross the line ("first place") never has a
+  //     penalty.
+  //   • Everyone else loses (their finish time − first place time) × 20
+  //     points, where time is measured in seconds.
+  //   • If a rival hasn't actually finished by the time the player does, we
+  //     extrapolate their finish time from their current position using
+  //     their max (base) speed.
+  gameState = 'finished';
+  const endEl   = document.getElementById('end');
+  const titleEl = document.getElementById('endTitle');
+  const statsEl = document.getElementById('endStats');
+  const logoEl  = document.getElementById('endLogo');
+  const trackTotal = segments.length * SEG_LEN;
+  const finishZ   = (segments.length - 6) * SEG_LEN;
+  const now       = performance.now();
+  const startMs   = player.startTime;
+
+  // Defensive: stamp rivals that crossed the line at this exact frame
+  for (const r of rivals) {
+    if (!r.finishTime && r.z >= finishZ) r.finishTime = now;
+  }
+
+  // --- Compute each racer's finish time in seconds ---
+  const playerTimeS = ((player.finishTime || now) - startMs) / 1000;
+  const rivalTimeS = (r) => {
+    if (r.finishTime) return (r.finishTime - startMs) / 1000;
+    // Extrapolate using max (base) speed
+    const elapsed = (now - startMs) / 1000;
+    const dist = Math.max(0, finishZ - r.z);
+    return elapsed + dist / r.baseSpeed;
+  };
+
+  const racers = [
+    { name: 'RON (YOU)', isPlayer: true,
+      raw: player.score,
+      progress: clamp(player.z / trackTotal, 0, 1) * 100,
+      time: playerTimeS, didFinish: !!player.finishTime,
+      color: '#ffe27f' },
+    { name: 'APEXION', isPlayer: false,
+      raw: rivals[0].score,
+      progress: clamp(rivals[0].z / trackTotal, 0, 1) * 100,
+      time: rivalTimeS(rivals[0]), didFinish: !!rivals[0].finishTime,
+      color: '#ff8da0' },
+    { name: 'KONNEXXT', isPlayer: false,
+      raw: rivals[1].score,
+      progress: clamp(rivals[1].z / trackTotal, 0, 1) * 100,
+      time: rivalTimeS(rivals[1]), didFinish: !!rivals[1].finishTime,
+      color: '#9bf5c8' }
+  ];
+
+  // First place = lowest finish time. The winner has no penalty.
+  const winnerTime = Math.min.apply(null, racers.map(r => r.time));
+  const winner = racers.find(r => r.time === winnerTime);
+  winner.isFirst = true;
+  // First place across the line collects a +1500 finish bonus on top of
+  // their accumulated raw score (added before the penalty math, so the
+  // bonus shows up in both the SCORE and FINAL columns).
+  winner.bonus = 1500;
+  winner.raw += 1500;
+
+  for (const r of racers) {
+    const deltaS = Math.max(0, r.time - winnerTime);
+    r.penalty = Math.round(deltaS * 450);
+    r.final   = r.raw - r.penalty;
+  }
+
+  // Leaderboard ranked by final score (winner of the race may not be the
+  // winner of the leaderboard if their raw score was low).
+  const sorted = [...racers].sort((a, b) => b.final - a.final);
+
+  // The iConnections logo is a static <img> in the markup (assets/icon_logo.svg)
+  titleEl.textContent = 'WELCOME TO MIAMI';
+
+  let body = '';
+
+  body += '<table class="leaderboard-table"><thead><tr>';
+  body += '<th>RANK</th><th style="text-align:left;padding-left:14px">RACER</th><th>TIME</th><th>SCORE</th><th>PENALTY</th><th>FINAL</th>';
+  body += '</tr></thead><tbody>';
+  const medals = ['🏆', '🥈', '🥉'];
+  sorted.forEach((r, idx) => {
+    const cls = (idx === 0 ? 'first ' : '') + (r.isPlayer ? 'you' : '');
+    const timeText = `${r.time.toFixed(1)}s`;
+    const flag = r.isFirst ? ` 🏁 <span style="color:#ffd23f;font-size:10px">+${(r.bonus || 0).toLocaleString()}</span>` : '';
+    body += `<tr class="${cls}">`;
+    body += `<td>${medals[idx]}</td>`;
+    body += `<td class="racer" style="color:${r.color}">${r.name}${flag}</td>`;
+    body += `<td>${timeText}</td>`;
+    body += `<td>${r.raw.toLocaleString()}</td>`;
+    body += `<td>${r.penalty > 0 ? '−' + r.penalty.toLocaleString() : '0'}</td>`;
+    body += `<td class="final">${r.final.toLocaleString()}</td>`;
+    body += '</tr>';
+  });
+  body += '</tbody></table>';
+
+  // Player's haul — counts of items Ron picked up during the race
+  body += `<div class="player-haul">
+    <div class="haul-title">RON'S HAUL</div>
+    <div class="haul-row">
+      <span class="haul-pill" style="border-color:#3D7878;color:#1F4242">💰 SPONSORS · <b>${player.sponsors}</b></span>
+      <span class="haul-pill" style="border-color:#8A7E10;color:#4D4708">🤝 FUND MANAGERS · <b>${player.fms}</b></span>
+      <span class="haul-pill" style="border-color:#20512C;color:#102816">🏛 ALLOCATORS · <b>${player.allocs}</b></span>
+    </div>
+  </div>`;
+
+  statsEl.innerHTML = body;
+  endEl.classList.remove('hidden');
+  // Race music stops; the calmer end-screen music + beach atmosphere fades in
+  stopMusic();
+  startEndMusic();
+}
+
+// =====================================================================
+// INPUT
+// =====================================================================
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Space' && gameState === 'racing') tryBoost();
+  // Capture the first UP-press timestamp for the pre-acceleration bonus.
+  // Counts during countdown OR within the early race window.
+  if (e.code === 'ArrowUp' && !preAccelBonusAwarded
+      && (gameState === 'countdown' || gameState === 'racing')) {
+    if (preAccelPressTime === null) {
+      preAccelPressTime = performance.now();
+      // If GO! has already fired, the bonus is awarded immediately
+      if (preAccelGoTime !== null) {
+        awardPreAccelBonus();
+        preAccelBonusAwarded = true;
+      }
+    }
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', startGame);
+
+function tryBoost() {
+  if (player.boost > 0 && player.boostTimer <= 0) {
+    player.boost -= 1;
+    player.boostTimer = 1.4;
+    showToast('AI BOOST!', '#3ddcff');
+  }
+}
+
+// Award a STARTING-SPEED bonus based on how closely the first UP press
+// matches GO!. Press exactly on GO → start the race at MAX_SPEED. The
+// bonus tapers linearly to zero at ±500ms; outside that ±0.5s window
+// there's no bonus and the player starts from a standstill.
+function awardPreAccelBonus() {
+  if (preAccelPressTime === null || preAccelGoTime === null) return;
+  const offsetMs = Math.abs(preAccelPressTime - preAccelGoTime);
+  if (offsetMs > 500) return; // outside the ±0.5s window — no bonus, no toast
+  const factor = 1 - offsetMs / 500;          // 1.0 at GO, 0.0 at ±500ms
+  player.speed = factor * MAX_SPEED;
+  // Tier-named feedback toast
+  let msg, color;
+  if      (offsetMs <= 50)  { msg = 'PERFECT START!'; color = '#ffd23f'; }
+  else if (offsetMs <= 150) { msg = 'GREAT START!';   color = '#3ddcff'; }
+  else if (offsetMs <= 300) { msg = 'GOOD START';     color = '#6dfcb1'; }
+  else                      { msg = 'OK START';       color = '#bbcfff'; }
+  showToast(msg, color, 2.0);
+}
+
+// =====================================================================
+// HUD
+// =====================================================================
+const hud = {
+  score: document.getElementById('hudScore'),
+  speed: document.getElementById('hudSpeed'),
+  nitro: document.getElementById('hudNitro'),
+  sponsors: document.getElementById('hudSponsors'),
+  fms: document.getElementById('hudFMs'),
+  allocs: document.getElementById('hudAllocs'),
+  ron: document.getElementById('lbRon'),
+  rival1: document.getElementById('lbRival1'),
+  rival2: document.getElementById('lbRival2'),
+  toast: document.getElementById('toast')
+};
+
+function updateHUD() {
+  hud.score.textContent = player.score.toLocaleString();
+  const ronPct = Math.min(100, Math.floor(player.z / (segments.length * SEG_LEN) * 100));
+  hud.speed.textContent = Math.floor(player.speed / 60);
+  hud.nitro.textContent = player.boost;
+  hud.sponsors.textContent = player.sponsors;
+  hud.fms.textContent = player.fms;
+  hud.allocs.textContent = player.allocs;
+  hud.ron.textContent = ronPct + '%';
+  hud.rival1.textContent = Math.min(100, Math.floor(rivals[0].z / (segments.length * SEG_LEN) * 100)) + '%';
+  hud.rival2.textContent = Math.min(100, Math.floor(rivals[1].z / (segments.length * SEG_LEN) * 100)) + '%';
+}
+
+// =====================================================================
+// PICKUP FLOATERS — small icon + "+N" rises and fades
+// =====================================================================
+function addFloater(kind, points, color, text) {
+  floaters.push({
+    kind, points, color,
+    text: text || ('+' + points),
+    x: W / 2 + player.x * 60 + (Math.random() - 0.5) * 24,
+    y: H - 210,
+    age: 0,
+    duration: 1.0
+  });
+}
+
+function updateFloaters(dt) {
+  for (const f of floaters) f.age += dt;
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    if (floaters[i].age >= floaters[i].duration) floaters.splice(i, 1);
+  }
+}
+
+function renderFloaters() {
+  for (const f of floaters) {
+    const t = f.age / f.duration;
+    // Pop scale: 0.4 → 1.15 in first 0.18s with ease-out
+    const popPhase = clamp(f.age / 0.18, 0, 1);
+    const eased = 1 - Math.pow(1 - popPhase, 2);
+    const scale = 0.4 + 0.75 * eased;
+    // Fade: hold for 65% then ease out
+    const alpha = t < 0.65 ? 1 : Math.max(0, 1 - (t - 0.65) / 0.35);
+    // Rise 140px over the lifetime
+    const fy = f.y - t * 140;
+    const fx = f.x;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // Just "+N" text — the picked-up item itself disappears immediately
+    ctx.fillStyle = f.color;
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 12;
+    ctx.font = `900 ${Math.round(30 * scale)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(f.text, fx, fy);
+    ctx.restore();
+  }
+}
+
+let toastTimer = 0;
+function showToast(text, color, duration) {
+  hud.toast.textContent = text;
+  hud.toast.style.color = color || '#fff';
+  hud.toast.style.opacity = '1';
+  hud.toast.style.transform = 'translateX(-50%) translateY(0)';
+  toastTimer = duration || 1.0;
+}
+
+// =====================================================================
+// UPDATE
+// =====================================================================
+function findSegment(z) {
+  const idx = Math.floor(z / SEG_LEN) % segments.length;
+  return segments[idx >= 0 ? idx : idx + segments.length];
+}
+
+function update(dt) {
+  if (gameState === 'countdown') {
+    countdownTimer -= dt;
+    // Race begins the INSTANT the GO! beat starts (countdownTimer crosses
+    // 0.6 — that's when the GO! text first appears) instead of waiting
+    // for the GO! animation to finish at 0.
+    if (countdownTimer <= 0.6) {
+      gameState = 'racing';
+      player.startTime = performance.now();
+      preAccelGoTime = player.startTime;
+      // If the player already pressed UP during the countdown, score the
+      // timing right now using the press time we already captured.
+      if (preAccelPressTime !== null && !preAccelBonusAwarded) {
+        awardPreAccelBonus();
+        preAccelBonusAwarded = true;
+      }
+    }
+    // Decay shake / fade-in even during countdown so the camera settles
+    if (shake > 0) shake = Math.max(0, shake - dt);
+    if (fadeIn > 0) fadeIn = Math.max(0, fadeIn - dt * 0.6);
+    updateHUD();
+    return;
+  }
+  // Keep ticking the countdown timer down to 0 so the GO! visual still
+  // animates and dismisses on its own while racing.
+  if (countdownTimer > 0) {
+    countdownTimer -= dt;
+    if (countdownTimer < 0) countdownTimer = 0;
+  }
+  if (gameState !== 'racing') return;
+
+  // Player
+  const startSeg = findSegment(player.z + PLAYER_Z);
+  const speedPct = player.speed / MAX_SPEED;
+  const dx = dt * 2 * speedPct;
+
+  // Move forward
+  player.z = increase(player.z, dt * player.speed, segments.length * SEG_LEN);
+  if (player.z >= (segments.length - 6) * SEG_LEN && !player.finished) {
+    player.finished = true;
+    player.finishTime = performance.now();
+    endGame();
+    return;
+  }
+
+  // Steering
+  if (keys['ArrowLeft'])  player.x -= dx;
+  if (keys['ArrowRight']) player.x += dx;
+  // Centrifugal force on curves
+  player.x -= (dx * speedPct * startSeg.curve * CENTRIFUGAL);
+
+  // Speed
+  let topSpeed = MAX_SPEED;
+  if (player.boostTimer > 0) {
+    player.boostTimer -= dt;
+    topSpeed = MAX_SPEED * 1.45;
+  }
+  if (keys['ArrowUp']) {
+    player.speed = accel(player.speed, ACCEL, dt);
+  } else if (keys['ArrowDown']) {
+    player.speed = accel(player.speed, BRAKING, dt);
+  } else {
+    player.speed = accel(player.speed, DECEL, dt);
+  }
+  if (player.speed > topSpeed) player.speed = topSpeed;
+
+  // Off-road: heavy drag past the rumble strips. Crucially, only apply
+  // the drag when speed is above OFFROAD_LIMIT so the player can always
+  // accelerate back up to that cap from a complete stop.
+  const offroad = (player.x < -1 || player.x > 1);
+  if (offroad && player.speed > OFFROAD_LIMIT) {
+    player.speed = accel(player.speed, OFFROAD_DECEL, dt);
+  }
+
+  // Snow slows you slightly while it's coming down
+  if (weatherIntensity > 0.2) {
+    player.speed = accel(player.speed, DECEL * 0.55 * weatherIntensity, dt);
+  }
+
+  player.x = clamp(player.x, -2.5, 2.5);
+  player.speed = clamp(player.speed, 0, topSpeed);
+
+  // Hit timer
+  if (player.hitTimer > 0) player.hitTimer -= dt;
+  // Spinout
+  if (player.spinoutTimer > 0) {
+    player.spinoutTimer -= dt;
+    const t = clamp(1 - (player.spinoutTimer / player.spinoutMax), 0, 1);
+    const eased = 1 - Math.pow(1 - t, 2); // ease-out — fast then slow
+    player.spinoutAngle = eased * player.spinoutTotal;
+    if (player.spinoutTimer <= 0) {
+      player.spinoutTimer = 0;
+      player.spinoutAngle = 0;
+    }
+  }
+
+  // Sprite collisions
+  // Only check the segment the player is currently in
+  const playerSeg = findSegment(player.z + PLAYER_Z);
+  for (const s of playerSeg.sprites) {
+    if (s.kind === 'palm' || s.kind === 'billboard') continue;
+    if (s.collected || s.hit) continue;
+    const playerHalfW = 0.15;
+    const spriteHalfW = 0.13;
+    if (Math.abs(player.x - s.offset) < (playerHalfW + spriteHalfW)) {
+      handlePickup(s);
+    }
+  }
+
+  // Rival movement & collection
+  for (const r of rivals) {
+    // adjust x slightly to dodge each other and seek pickups
+    if (r.nitroTimer > 0) r.nitroTimer = Math.max(0, r.nitroTimer - dt);
+    const nitroMul = r.nitroTimer > 0 ? 1.45 : 1.0;
+    r.z += dt * r.speed * nitroMul;
+    if (r.hitCool > 0) r.hitCool -= dt;
+    // gentle weave
+    r.x += Math.sin(r.z * 0.0003 + (r.name === 'CAP' ? 0 : 1.5)) * dt * 0.4;
+    r.x = clamp(r.x, -0.85, 0.85);
+    // Rivals interact with pickups (sponsors / FMs / allocators) and with the
+    // physical hazards (snow, outage). Hazards still do NOT trigger the
+    // player's snowstorm screen animation, weather tint, score change, or
+    // toast — they just spinout and slow the rival down silently.
+    // Phishing is purely a player score event, so rivals ignore it entirely.
+    const rSeg = findSegment(r.z + PLAYER_Z * 0.5);
+    for (const s of rSeg.sprites) {
+      if (s.collected || s.hit) continue;
+      if (Math.abs(r.x - s.offset) >= 0.28) continue;
+
+      if (s.kind === 'sponsor' || s.kind === 'fm' || s.kind === 'allocator') {
+        s.collected = true;
+        r.score += (s.kind === 'sponsor' ? 500 : (s.kind === 'allocator' ? 300 : 200));
+        continue;
+      }
+
+      // Nitro: rivals trigger it instantly (no stockpile) — gives a brief
+      // forward speed-up the same way the player's nitro does.
+      if (s.kind === 'nitro') {
+        s.collected = true;
+        r.nitroTimer = Math.max(r.nitroTimer, 1.4);
+        continue;
+      }
+
+      // Hazards: only react if the rival isn't already in a hazard cooldown.
+      if (r.hazardCool > 0) continue;
+      if (s.kind === 'outage') {
+        s.hit = true;
+        r.hazardCool = 1.4;
+        r.speed *= 0.4;
+        r.spinoutTimer = 1.4; r.spinoutMax = 1.4;
+        r.spinoutTotal = Math.PI * 4 * (Math.random() < 0.5 ? 1 : -1);
+      } else if (s.kind === 'snow') {
+        s.hit = true;
+        r.hazardCool = 0.9;
+        r.speed *= 0.85;
+        r.spinoutTimer = 0.9; r.spinoutMax = 0.9;
+        r.spinoutTotal = Math.PI * 2.5 * (Math.random() < 0.5 ? 1 : -1);
+        // IMPORTANT: do NOT touch weatherIntensity / weatherTimer here —
+        // the snowstorm animation is a player-only event.
+      }
+      // Phishing emails do NOT affect rivals — they're a player-only event.
+    }
+    // Decay rival hazard cooldown + spinout
+    if (r.hazardCool > 0) r.hazardCool -= dt;
+    if (r.spinoutTimer > 0) {
+      r.spinoutTimer -= dt;
+      const t = clamp(1 - (r.spinoutTimer / r.spinoutMax), 0, 1);
+      const eased = 1 - Math.pow(1 - t, 2);
+      r.spinoutAngle = eased * r.spinoutTotal;
+      if (r.spinoutTimer <= 0) {
+        r.spinoutTimer = 0;
+        r.spinoutAngle = 0;
+      }
+    }
+    // Recover rival speed back toward its baseline
+    if (r.speed < r.baseSpeed) {
+      r.speed = Math.min(r.baseSpeed, r.speed + r.baseSpeed * 0.7 * dt);
+    }
+    // Check rival vs player collision (rival passes player)
+    const dz = r.z - (player.z + PLAYER_Z);
+    if (Math.abs(dz) < SEG_LEN * 1.5 && Math.abs(r.x - player.x) < 0.3 && r.hitCool <= 0 && player.hitTimer <= 0) {
+      // Either racer can lose the bump. Probability is weighted by speed —
+      // the faster racer has a higher chance of glancing off, the slower
+      // racer has a higher chance of taking the heavy hit. Sampled
+      // randomly so the outcome is never fully deterministic.
+      shake = 0.4;
+      r.hitCool = 1.0;
+      player.hitTimer = 0.5;
+      const total = Math.max(1, player.speed + r.speed);
+      const playerWinChance = player.speed / total;
+      const playerWins = Math.random() < playerWinChance;
+      if (playerWins) {
+        // The rival eats the impact — heavy slowdown + spinout
+        r.speed *= 0.55;
+        r.spinoutTimer = 0.8; r.spinoutMax = 0.8;
+        r.spinoutTotal = Math.PI * 2 * (Math.random() < 0.5 ? 1 : -1);
+        player.speed *= 0.95; // glancing graze
+        showToast(`YOU BUMPED ${r.name}!`, '#ffd23f');
+      } else {
+        // The player eats the impact
+        player.speed *= 0.6;
+        r.speed *= 0.95; // glancing graze
+        showToast(`${r.name} BUMPED YOU!`, '#ff5577');
+      }
+    }
+  }
+
+  // No outpacing — the race only ends when the PLAYER crosses the finish.
+  // Rivals can finish ahead but the game won't trigger end until the player
+  // does. Stamp the moment each rival crosses the line so the end-screen can
+  // use real finish times for the penalty math, and cap their z so the
+  // progress bar doesn't drift past 100%.
+  for (const r of rivals) {
+    const finishZ = (segments.length - 6) * SEG_LEN;
+    if (r.z >= finishZ && !r.finishTime) {
+      r.finishTime = performance.now();
+    }
+    if (r.z > finishZ) r.z = finishZ;
+  }
+
+  // Weather decay — snowstorm animation only fires when the PLAYER hits a
+  // snow icon (handled in handlePickup). Here we just count down the active
+  // squall and fade its intensity out smoothly in the last 2 seconds.
+  if (weatherIntensity > 0) {
+    weatherTimer -= dt;
+    if (weatherTimer < 2.0) {
+      // Exponential fade as the squall trails off
+      weatherIntensity *= Math.pow(0.15, dt);
+    }
+    if (weatherTimer <= 0 || weatherIntensity < 0.02) {
+      weatherIntensity = 0;
+      weatherTimer = 0;
+    }
+  }
+
+  // Shake decay
+  if (shake > 0) shake = Math.max(0, shake - dt);
+
+  // Toast fade
+  if (toastTimer > 0) {
+    toastTimer -= dt;
+    if (toastTimer <= 0) hud.toast.style.opacity = '0';
+  }
+
+  // Floater animation lifetimes
+  updateFloaters(dt);
+
+  // Fade in
+  if (fadeIn > 0) fadeIn = Math.max(0, fadeIn - dt * 0.6);
+
+  updateHUD();
+}
+
+function handlePickup(s) {
+  switch (s.kind) {
+    case 'sponsor':
+      s.collected = true;
+      player.sponsors++;
+      player.score += 500;
+      addFloater('sponsor', 500, '#8CCECE');
+      // Every 3 sponsors → +1 boost charge (silent — visible in HUD)
+      if (player.sponsors % 3 === 0 && player.boost < 3) {
+        player.boost++;
+      }
+      break;
+    case 'fm':
+      s.collected = true;
+      player.fms++;
+      player.score += 200;
+      addFloater('fm', 200, '#EEDE22');
+      break;
+    case 'allocator':
+      s.collected = true;
+      player.allocs++;
+      player.score += 300;
+      addFloater('allocator', 300, '#4FB871');
+      break;
+    case 'nitro':
+      s.collected = true;
+      if (player.boost < 3) {
+        player.boost++;
+        addFloater('nitro', 0, '#3ddcff', '+AI BOOST');
+      } else {
+        addFloater('nitro', 0, '#c83dff', 'AI BOOST FULL');
+      }
+      break;
+    case 'phishing':
+      if (player.hitTimer > 0) return;
+      s.hit = true;
+      player.score = player.score - 1000;
+      player.hitTimer = 0.8;
+      showToast('PHISHED! −1000', '#aaaaaa', 2.6);
+      break;
+    case 'outage':
+      if (player.hitTimer > 0) return;
+      s.hit = true;
+      player.speed *= 0.4;
+      player.hitTimer = 1.6;       // sustained slowdown window
+      shake = 0.5;
+      // Hard spinout: 2 full rotations over 1.4s, random direction
+      player.spinoutTimer = 1.4;
+      player.spinoutMax = 1.4;
+      player.spinoutTotal = Math.PI * 4 * (Math.random() < 0.5 ? 1 : -1);
+      showToast('PLATFORM OUTAGE!', '#ff5566', 2.6);
+      break;
+    case 'snow':
+      if (player.hitTimer > 0) return;
+      s.hit = true;
+      weatherIntensity = Math.min(1, weatherIntensity + 0.6);
+      weatherTimer = Math.max(weatherTimer, 5);
+      player.speed *= 0.85;
+      player.hitTimer = 0.6;
+      // Lighter spinout: 1.25 rotations over 0.9s
+      player.spinoutTimer = 0.9;
+      player.spinoutMax = 0.9;
+      player.spinoutTotal = Math.PI * 2.5 * (Math.random() < 0.5 ? 1 : -1);
+      showToast('SNOW STORM!', '#bbcfff', 2.6);
+      break;
+  }
+}
+
+// =====================================================================
+// RENDER
+// =====================================================================
+function colorFor(name, fog) {
+  // returns {road, grass, rumble, lane}
+  let palette;
+  if (name === 'LIGHT') palette = { road: '#3a3450', grass: '#241544', rumble: '#ff2bd6', lane: '#ffffff' };
+  else if (name === 'DARK') palette = { road: '#2a2440', grass: '#1a0a36', rumble: '#ffffff', lane: null };
+  else if (name === 'START') palette = { road: '#ffffff', grass: '#241544', rumble: '#ffffff', lane: '#ffffff' };
+  else if (name === 'FINISH') palette = { road: '#111111', grass: '#241544', rumble: '#ffffff', lane: null };
+  else palette = { road: '#3a3450', grass: '#241544', rumble: '#ff2bd6', lane: '#ffffff' };
+  return palette;
+}
+
+function drawSky() {
+  // Synthwave sky gradient
+  const g = ctx.createLinearGradient(0, 0, 0, H * 0.62);
+  g.addColorStop(0, '#0a0030');
+  g.addColorStop(0.45, '#3b0066');
+  g.addColorStop(0.78, '#ff2bd6');
+  g.addColorStop(1, '#ffb347');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H * 0.62);
+
+  // Stars
+  ctx.fillStyle = '#fff';
+  for (const s of stars) {
+    ctx.globalAlpha = s.tw;
+    ctx.fillRect(s.x, s.y, s.r, s.r);
+  }
+  ctx.globalAlpha = 1;
+
+  // Sun
+  const horizon = H * 0.58;
+  const sunR = 90;
+  const sunGrad = ctx.createLinearGradient(W/2, horizon - sunR, W/2, horizon + sunR);
+  sunGrad.addColorStop(0, '#ffe14a');
+  sunGrad.addColorStop(0.5, '#ff7a3c');
+  sunGrad.addColorStop(1, '#ff2bd6');
+  ctx.fillStyle = sunGrad;
+  ctx.beginPath();
+  ctx.arc(W/2, horizon - 8, sunR, 0, Math.PI * 2);
+  ctx.fill();
+  // Sun horizontal slats
+  ctx.fillStyle = '#0a0030';
+  for (let i = 0; i < 6; i++) {
+    const y = horizon - 8 + i * 12 + 6;
+    if (y < horizon - 8 + sunR) ctx.fillRect(W/2 - sunR, y, sunR * 2, 3 + i);
+  }
+
+  // Distant skyline (precomputed)
+  for (const b of buildings) {
+    const top = horizon - b.h - 4;
+    ctx.fillStyle = 'rgba(20,0,40,0.92)';
+    ctx.fillRect(b.x - b.w/2, top, b.w, b.h + 4);
+    ctx.fillStyle = '#67d2ff';
+    for (const [r, c] of b.windows) {
+      ctx.fillRect(b.x - b.w/2 + 2 + c * 6, top + 4 + r * 8, 2, 3);
+    }
+  }
+
+  // Horizon glow line
+  const glow = ctx.createLinearGradient(0, horizon - 2, 0, horizon + 6);
+  glow.addColorStop(0, 'rgba(255,43,214,0)');
+  glow.addColorStop(0.5, 'rgba(255,43,214,0.9)');
+  glow.addColorStop(1, 'rgba(255,43,214,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, horizon - 2, W, 8);
+}
+
+function drawGround() {
+  const horizon = H * 0.58;
+  // Pink/purple ground gradient
+  const g = ctx.createLinearGradient(0, horizon, 0, H);
+  g.addColorStop(0, '#280a4a');
+  g.addColorStop(1, '#0a0020');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, horizon, W, H - horizon);
+
+  // Grid lines on ground
+  ctx.strokeStyle = 'rgba(255,43,214,0.55)';
+  ctx.lineWidth = 1;
+  // Horizontal grid lines
+  for (let i = 1; i <= 18; i++) {
+    const t = i / 18;
+    const y = horizon + t * t * (H - horizon);
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  // Vanishing-point vertical lines
+  const vpx = W / 2;
+  for (let i = -10; i <= 10; i++) {
+    if (i === 0) continue;
+    ctx.beginPath();
+    ctx.moveTo(vpx + i * 50, horizon);
+    ctx.lineTo(vpx + i * 600, H);
+    ctx.stroke();
+  }
+}
+
+function drawPolygon(x1, y1, x2, y2, x3, y3, x4, y4, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.lineTo(x3, y3);
+  ctx.lineTo(x4, y4);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function renderRoadSegment(p1, p2, color, fog) {
+  const c = colorFor(color, fog);
+  const r1 = (p1.screen.w / Math.max(6, 6)) * 1; // rumble width fixed
+  const r2 = (p2.screen.w / Math.max(6, 6)) * 1;
+  const rumble1 = p1.screen.w / 5;
+  const rumble2 = p2.screen.w / 5;
+  const lane1 = p1.screen.w / 30;
+  const lane2 = p2.screen.w / 30;
+
+  // grass (full width band)
+  ctx.fillStyle = c.grass;
+  ctx.fillRect(0, p2.screen.y, W, p1.screen.y - p2.screen.y);
+
+  // rumble
+  drawPolygon(
+    p1.screen.x - p1.screen.w - rumble1, p1.screen.y,
+    p1.screen.x - p1.screen.w,            p1.screen.y,
+    p2.screen.x - p2.screen.w,            p2.screen.y,
+    p2.screen.x - p2.screen.w - rumble2,  p2.screen.y, c.rumble);
+  drawPolygon(
+    p1.screen.x + p1.screen.w + rumble1, p1.screen.y,
+    p1.screen.x + p1.screen.w,            p1.screen.y,
+    p2.screen.x + p2.screen.w,            p2.screen.y,
+    p2.screen.x + p2.screen.w + rumble2,  p2.screen.y, c.rumble);
+
+  // road
+  drawPolygon(
+    p1.screen.x - p1.screen.w, p1.screen.y,
+    p1.screen.x + p1.screen.w, p1.screen.y,
+    p2.screen.x + p2.screen.w, p2.screen.y,
+    p2.screen.x - p2.screen.w, p2.screen.y, c.road);
+
+  // lane markers
+  if (c.lane) {
+    const lw1 = (p1.screen.w * 2 / LANES) - lane1 / 2;
+    const lw2 = (p2.screen.w * 2 / LANES) - lane2 / 2;
+    let x1 = p1.screen.x - p1.screen.w + lw1;
+    let x2 = p2.screen.x - p2.screen.w + lw2;
+    for (let i = 1; i < LANES; i++) {
+      drawPolygon(
+        x1 - lane1 / 2, p1.screen.y,
+        x1 + lane1 / 2, p1.screen.y,
+        x2 + lane2 / 2, p2.screen.y,
+        x2 - lane2 / 2, p2.screen.y, c.lane);
+      x1 += lw1;
+      x2 += lw2;
+    }
+  }
+
+  // Fog overlay
+  if (fog < 1) {
+    ctx.fillStyle = `rgba(20, 0, 60, ${1 - fog})`;
+    ctx.fillRect(0, p2.screen.y, W, p1.screen.y - p2.screen.y);
+  }
+}
+
+function renderSprite(sprite, segP, screenW) {
+  const scale = segP.screen.scale;
+  const destW = scale * 220 * (W / 2);
+  const destH = scale * 220 * (W / 2);
+  const sx = segP.screen.x + (scale * sprite.offset * ROAD_WIDTH * (W / 2));
+  const sy = segP.screen.y;
+
+  // clip below horizon? draw sprites up to the horizon line
+  drawSpriteShape(sprite.kind, sx, sy, destW, destH);
+}
+
+function drawSpriteShape(kind, sx, sy, w, h) {
+  ctx.save();
+  switch (kind) {
+    case 'palm': drawPalm(sx, sy, w * 2.0, h * 3.0); break;
+    case 'billboard': drawBillboard(sx, sy, w * 1.4, h * 0.9); break;
+    case 'sponsor': drawSponsor(sx, sy, w * 1.55, h * 1.55); break;
+    case 'fm': drawFM(sx, sy, w * 1.6, h * 1.6); break;
+    case 'allocator': drawAllocator(sx, sy, w * 1.65, h * 1.65); break;
+    case 'nitro': drawNitro(sx, sy, w * 1.45, h * 1.65); break;
+    case 'phishing': drawPhishing(sx, sy, w * 1.55, h * 1.55); break;
+    case 'outage': drawOutage(sx, sy, w * 1.5, h * 1.65); break;
+    case 'snow': drawSnow(sx, sy, w * 1.55, h * 1.55); break;
+  }
+  ctx.restore();
+}
+
+function drawPalm(x, y, w, h) {
+  if (w < 4) return;
+  ctx.strokeStyle = '#3a1a00';
+  ctx.lineWidth = Math.max(2, w * 0.08);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo(x + w * 0.1, y - h * 0.5, x - w * 0.05, y - h);
+  ctx.stroke();
+  // fronds
+  const tx = x - w * 0.05, ty = y - h;
+  ctx.fillStyle = '#0d6e4a';
+  for (let a = 0; a < 7; a++) {
+    const ang = -Math.PI / 2 + (a - 3) * 0.45;
+    const fl = h * 0.55;
+    const fx = tx + Math.cos(ang) * fl;
+    const fy = ty + Math.sin(ang) * fl;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.quadraticCurveTo(tx + Math.cos(ang) * fl * 0.6, ty + Math.sin(ang) * fl * 0.4 - 6, fx, fy);
+    ctx.lineTo(tx, ty);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#5a3a00';
+  ctx.beginPath(); ctx.arc(tx, ty, w * 0.1, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawBillboard(x, y, w, h) {
+  if (w < 8) return;
+  // posts
+  ctx.fillStyle = '#222';
+  ctx.fillRect(x - w * 0.4, y - h * 0.2, w * 0.06, h * 0.2);
+  ctx.fillRect(x + w * 0.34, y - h * 0.2, w * 0.06, h * 0.2);
+  // sign
+  ctx.fillStyle = '#0a0030';
+  ctx.fillRect(x - w / 2, y - h * 1.0, w, h * 0.8);
+  ctx.strokeStyle = '#ff2bd6';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - w / 2, y - h * 1.0, w, h * 0.8);
+  if (w > 60) {
+    ctx.fillStyle = '#ff2bd6';
+    ctx.font = `bold ${Math.floor(h * 0.22)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.fillText('GLOBAL', x, y - h * 0.7);
+    ctx.fillStyle = '#67d2ff';
+    ctx.fillText('ALTS', x, y - h * 0.45);
+  }
+}
+
+function drawSponsor(x, y, w, h) {
+  if (w < 4) return;
+  // Sponsor base color: #8CCECE (light teal)
+  ctx.fillStyle = '#0a2424';
+  ctx.fillRect(x - w/2, y - h, w, h);
+  ctx.strokeStyle = '#8CCECE';
+  ctx.lineWidth = Math.max(1, w * 0.04);
+  ctx.strokeRect(x - w/2, y - h, w, h);
+  ctx.fillStyle = '#8CCECE';
+  ctx.font = `bold ${Math.floor(h * 0.55)}px 'Courier New'`;
+  ctx.textAlign = 'center';
+  ctx.fillText('$', x, y - h * 0.25);
+  if (w > 12) {
+    ctx.shadowColor = '#8CCECE';
+    ctx.shadowBlur = 14;
+    ctx.strokeRect(x - w/2, y - h, w, h);
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawFM(x, y, w, h) {
+  if (w < 4) return;
+  // FM base color: #EEDE22 (yellow)
+  ctx.fillStyle = '#3a3208';
+  ctx.fillRect(x - w/2, y - h * 0.85, w, h * 0.7);
+  ctx.strokeStyle = '#EEDE22';
+  ctx.lineWidth = Math.max(1, w * 0.04);
+  ctx.strokeRect(x - w/2, y - h * 0.85, w, h * 0.7);
+  ctx.beginPath();
+  ctx.arc(x, y - h * 0.9, w * 0.18, Math.PI, 0);
+  ctx.stroke();
+  if (w > 14) {
+    ctx.fillStyle = '#EEDE22';
+    ctx.font = `bold ${Math.floor(h * 0.28)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.fillText('FM', x, y - h * 0.45);
+  }
+}
+
+function drawAllocator(x, y, w, h) {
+  if (w < 4) return;
+  // Allocator base color: #20512C (dark forest green); cream accents for contrast
+  ctx.fillStyle = '#20512C';
+  ctx.fillRect(x - w/2, y - h * 0.8, w, h * 0.65);
+  ctx.strokeStyle = '#EAE0C4';
+  ctx.lineWidth = Math.max(1, w * 0.04);
+  ctx.strokeRect(x - w/2, y - h * 0.8, w, h * 0.65);
+  // Triangular pediment
+  ctx.fillStyle = '#20512C';
+  ctx.beginPath();
+  ctx.moveTo(x - w/2 - 2, y - h * 0.8);
+  ctx.lineTo(x, y - h * 1.05);
+  ctx.lineTo(x + w/2 + 2, y - h * 0.8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#EAE0C4';
+  ctx.stroke();
+  if (w > 16) {
+    ctx.fillStyle = '#EAE0C4';
+    for (let i = 0; i < 4; i++) {
+      const cx = x - w/2 + (w / 4) * i + (w / 8);
+      ctx.fillRect(cx - w * 0.04, y - h * 0.7, w * 0.06, h * 0.45);
+    }
+  }
+  if (w > 24) {
+    ctx.fillStyle = '#EAE0C4';
+    ctx.font = `bold ${Math.floor(h * 0.18)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.fillText('LP', x, y - h * 0.2);
+  }
+}
+
+function drawNitro(x, y, w, h) {
+  if (w < 4) return;
+  // Helper: trace the flame silhouette into the current path
+  const flamePath = (sw, sh) => {
+    ctx.beginPath();
+    ctx.moveTo(x, y - sh);
+    ctx.quadraticCurveTo(x + sw * 0.45, y - sh * 0.70, x + sw * 0.38, y - sh * 0.25);
+    ctx.quadraticCurveTo(x + sw * 0.20, y - sh * 0.05, x, y - sh * 0.05);
+    ctx.quadraticCurveTo(x - sw * 0.20, y - sh * 0.05, x - sw * 0.38, y - sh * 0.25);
+    ctx.quadraticCurveTo(x - sw * 0.45, y - sh * 0.70, x, y - sh);
+    ctx.closePath();
+  };
+
+  // 1) Aggressive cyan glow halo behind the icon
+  if (w > 10) {
+    ctx.save();
+    ctx.shadowColor = '#00e5ff';
+    ctx.shadowBlur = w * 0.85;
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.55)';
+    flamePath(w * 1.05, h * 1.05);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 2) Outer flame body — synthwave cyan
+  ctx.save();
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = w > 14 ? 18 : 8;
+  ctx.fillStyle = '#3ddcff';
+  flamePath(w, h);
+  ctx.fill();
+  ctx.restore();
+
+  // 3) Inner flame — synthwave magenta/violet
+  ctx.save();
+  ctx.shadowColor = '#ff3df0';
+  ctx.shadowBlur = w > 14 ? 14 : 6;
+  ctx.fillStyle = '#c83dff';
+  flamePath(w * 0.78, h * 0.86);
+  ctx.fill();
+  ctx.restore();
+
+  // 4) White-hot core
+  ctx.fillStyle = '#ffffff';
+  flamePath(w * 0.42, h * 0.72);
+  ctx.fill();
+
+  // 5) Holographic scan-line shimmer (faint horizontal banding)
+  if (w > 16) {
+    ctx.save();
+    ctx.globalAlpha = 0.20;
+    ctx.fillStyle = '#ffffff';
+    flamePath(w, h);
+    ctx.clip();
+    for (let i = 0; i < 5; i++) {
+      const ly = y - h * (0.18 + i * 0.16);
+      ctx.fillRect(x - w * 0.5, ly, w, Math.max(1, h * 0.02));
+    }
+    ctx.restore();
+  }
+
+  // 6) Tiny AI sparkle — 4-pointed star with strong white glow
+  if (w > 12) {
+    const sparkle = (sx, sy, sr) => {
+      ctx.save();
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = sr * 5;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - sr * 1.6);
+      ctx.lineTo(sx + sr * 0.45, sy - sr * 0.45);
+      ctx.lineTo(sx + sr * 1.6, sy);
+      ctx.lineTo(sx + sr * 0.45, sy + sr * 0.45);
+      ctx.lineTo(sx, sy + sr * 1.6);
+      ctx.lineTo(sx - sr * 0.45, sy + sr * 0.45);
+      ctx.lineTo(sx - sr * 1.6, sy);
+      ctx.lineTo(sx - sr * 0.45, sy - sr * 0.45);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+    sparkle(x + w * 0.30, y - h * 0.85, Math.max(1.5, w * 0.07));
+    if (w > 22) sparkle(x - w * 0.26, y - h * 0.55, Math.max(1, w * 0.045));
+  }
+}
+
+function drawPhishing(x, y, w, h) {
+  if (w < 4) return;
+  ctx.fillStyle = '#dadada';
+  ctx.fillRect(x - w/2, y - h * 0.7, w, h * 0.55);
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = Math.max(1, w * 0.03);
+  ctx.strokeRect(x - w/2, y - h * 0.7, w, h * 0.55);
+  // Envelope flap
+  ctx.beginPath();
+  ctx.moveTo(x - w/2, y - h * 0.7);
+  ctx.lineTo(x, y - h * 0.42);
+  ctx.lineTo(x + w/2, y - h * 0.7);
+  ctx.stroke();
+  // hook (fishing hook denoting phish)
+  if (w > 12) {
+    ctx.strokeStyle = '#ff5577';
+    ctx.lineWidth = Math.max(1, w * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.2, y - h * 0.85);
+    ctx.lineTo(x + w * 0.2, y - h * 0.65);
+    ctx.arc(x + w * 0.13, y - h * 0.65, w * 0.07, 0, Math.PI);
+    ctx.stroke();
+  }
+}
+
+function drawOutage(x, y, w, h) {
+  if (w < 4) return;
+  // Red caution triangle
+  const tx = x;
+  const tyTop = y - h * 0.98;
+  const tyBot = y - h * 0.05;
+  const halfBase = w * 0.55;
+  ctx.fillStyle = '#e63342';
+  ctx.beginPath();
+  ctx.moveTo(tx, tyTop);
+  ctx.lineTo(tx - halfBase, tyBot);
+  ctx.lineTo(tx + halfBase, tyBot);
+  ctx.closePath();
+  ctx.fill();
+  // Dark red border
+  ctx.strokeStyle = '#3a0608';
+  ctx.lineWidth = Math.max(1.5, w * 0.06);
+  ctx.lineJoin = 'miter';
+  ctx.stroke();
+  // Exclamation mark in white for contrast on the red triangle
+  if (w > 10) {
+    ctx.fillStyle = '#ffffff';
+    const barW = Math.max(2, w * 0.13);
+    const barH = h * 0.42;
+    const barTop = y - h * 0.78;
+    ctx.fillRect(tx - barW / 2, barTop, barW, barH);
+    // Dot
+    ctx.beginPath();
+    ctx.arc(tx, y - h * 0.22, Math.max(2, w * 0.09), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Red glow halo
+  if (w > 22) {
+    ctx.save();
+    ctx.shadowColor = '#ff5566';
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = '#ff5566';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tx, tyTop);
+    ctx.lineTo(tx - halfBase, tyBot);
+    ctx.lineTo(tx + halfBase, tyBot);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawSnow(x, y, w, h) {
+  if (w < 4) return;
+  // soft white cloud
+  ctx.fillStyle = '#e8edf6';
+  ctx.beginPath();
+  ctx.arc(x - w * 0.32, y - h * 0.55, w * 0.27, 0, Math.PI * 2);
+  ctx.arc(x, y - h * 0.72, w * 0.32, 0, Math.PI * 2);
+  ctx.arc(x + w * 0.32, y - h * 0.55, w * 0.27, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#bbcfff';
+  ctx.beginPath();
+  ctx.arc(x - w * 0.18, y - h * 0.42, w * 0.18, 0, Math.PI * 2);
+  ctx.arc(x + w * 0.18, y - h * 0.42, w * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  // Snowflakes falling — six-armed stars when the sprite is large enough,
+  // simple dots when it's tiny in the distance.
+  const flakeCount = Math.max(5, Math.floor(w * 0.09));
+  for (let i = 0; i < flakeCount; i++) {
+    const fx = x + ((i * 73) % 100 - 50) / 100 * w * 0.85;
+    const fy = y - h * 0.32 + ((i * 41) % 100) / 100 * h * 0.32;
+    const isStar = (i % 2 === 0) && w > 22;
+    const fr = isStar ? Math.max(1.6, w * 0.05) : Math.max(1, w * 0.028);
+    ctx.fillStyle = '#ffffff';
+    if (isStar) {
+      // Center hub
+      ctx.beginPath();
+      ctx.arc(fx, fy, fr * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Six radial arms
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1, fr * 0.32);
+      ctx.lineCap = 'round';
+      for (let a = 0; a < 6; a++) {
+        const ang = (a / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx + Math.cos(ang) * fr * 1.3, fy + Math.sin(ang) * fr * 1.3);
+        ctx.stroke();
+      }
+    } else {
+      ctx.beginPath();
+      ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // glow
+  if (w > 24) {
+    ctx.shadowColor = '#bbcfff';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y - h * 0.7, w * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function _hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
+}
+function _shade(hex, amt) {
+  // amt in [-1..1]; positive lightens, negative darkens
+  const [r, g, b] = _hexToRgb(hex);
+  const m = (v) => Math.max(0, Math.min(255, Math.round(v + 255 * amt)));
+  return `rgb(${m(r)},${m(g)},${m(b)})`;
+}
+
+function drawRivalSprite(x, y, w, h, color, accent, rotation, hasNitro) {
+  if (w < 4) return;
+
+  // Flat shadow stays parallel to the ground regardless of any spinout rotation
+  ctx.fillStyle = 'rgba(0,0,0,0.62)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, w * 0.34, h * 0.075, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  if (rotation) {
+    const pivotY = y - h * 0.4;
+    ctx.translate(x, pivotY);
+    ctx.rotate(rotation);
+    ctx.translate(-x, -pivotY);
+  }
+
+  // Rear tire — vertical (viewed from behind)
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.ellipse(x, y - h * 0.09, w * 0.073, h * 0.13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Sidewall
+  ctx.fillStyle = '#1f1f24';
+  ctx.beginPath();
+  ctx.ellipse(x, y - h * 0.09, w * 0.041, h * 0.10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Tread bands
+  ctx.strokeStyle = '#0a0a0a';
+  ctx.lineWidth = 1;
+  for (let i = -2; i <= 2; i++) {
+    const ty = y - h * 0.09 + i * h * 0.04;
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.064, ty);
+    ctx.lineTo(x + w * 0.064, ty);
+    ctx.stroke();
+  }
+  // Tiny chrome highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(x - w * 0.023, y - h * 0.15, w * 0.009, h * 0.06);
+
+  // Exhausts (left + right)
+  ctx.fillStyle = '#888';
+  ctx.fillRect(x - w * 0.318, y - h * 0.18, w * 0.10, h * 0.07);
+  ctx.fillStyle = '#444';
+  ctx.beginPath();
+  ctx.arc(x - w * 0.318, y - h * 0.145, w * 0.036, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#888';
+  ctx.fillRect(x + w * 0.218, y - h * 0.18, w * 0.10, h * 0.07);
+  ctx.fillStyle = '#444';
+  ctx.beginPath();
+  ctx.arc(x + w * 0.318, y - h * 0.145, w * 0.036, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body fairing — gradient in the rival's color (mirrors player's chrome shape)
+  const bodyGrad = ctx.createLinearGradient(x - w * 0.227, y - h * 0.55, x + w * 0.227, y - h * 0.14);
+  bodyGrad.addColorStop(0, _shade(color, 0.35));
+  bodyGrad.addColorStop(0.5, color);
+  bodyGrad.addColorStop(1, _shade(color, -0.35));
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.227, y - h * 0.14);
+  ctx.lineTo(x - w * 0.273, y - h * 0.35);
+  ctx.lineTo(x - w * 0.127, y - h * 0.55);
+  ctx.lineTo(x + w * 0.127, y - h * 0.55);
+  ctx.lineTo(x + w * 0.273, y - h * 0.35);
+  ctx.lineTo(x + w * 0.227, y - h * 0.14);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tank stripe in accent
+  ctx.fillStyle = accent;
+  ctx.fillRect(x - w * 0.10, y - h * 0.475, w * 0.20, h * 0.04);
+
+  // Front fairing / windscreen
+  ctx.fillStyle = 'rgba(120, 200, 255, 0.4)';
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.109, y - h * 0.55);
+  ctx.lineTo(x - w * 0.064, y - h * 0.70);
+  ctx.lineTo(x + w * 0.064, y - h * 0.70);
+  ctx.lineTo(x + w * 0.109, y - h * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Rider torso — leathers in a darker shade of the rival color
+  ctx.fillStyle = _shade(color, -0.45);
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.136, y - h * 0.45);
+  ctx.lineTo(x - w * 0.109, y - h * 0.79);
+  ctx.lineTo(x + w * 0.109, y - h * 0.79);
+  ctx.lineTo(x + w * 0.136, y - h * 0.45);
+  ctx.closePath();
+  ctx.fill();
+  // Stripe down the back in accent
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - h * 0.45);
+  ctx.lineTo(x, y - h * 0.79);
+  ctx.stroke();
+
+  // Helmet (matte black) with accent visor and a small white shine
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.arc(x, y - h * 0.84, w * 0.082, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = accent;
+  ctx.fillRect(x - w * 0.055, y - h * 0.875, w * 0.11, h * 0.03);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x + w * 0.027, y - h * 0.89, w * 0.018, h * 0.015);
+
+  // Tail lights
+  ctx.fillStyle = '#ff3344';
+  ctx.fillRect(x - w * 0.10, y - h * 0.14, w * 0.055, h * 0.03);
+  ctx.fillRect(x + w * 0.045, y - h * 0.14, w * 0.055, h * 0.03);
+
+  // Boost flames when this rival is mid-nitro
+  if (hasNitro) {
+    const fs = w * 0.064 + Math.random() * w * 0.045;
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.318, y - h * 0.11);
+    ctx.lineTo(x - w * 0.318 - fs, y - h * 0.09);
+    ctx.lineTo(x - w * 0.318, y - h * 0.07);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ff7a3c';
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.318, y - h * 0.11);
+    ctx.lineTo(x + w * 0.318 + fs, y - h * 0.09);
+    ctx.lineTo(x + w * 0.318, y - h * 0.07);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawPlayerBike(x, y, speed, hitFlash, rotation) {
+  // x,y is center bottom of bike sprite on screen
+  ctx.save();
+  if (rotation) {
+    // Rotate around the bike's visual center
+    const pivotY = y - 90;
+    ctx.translate(x, pivotY);
+    ctx.rotate(rotation);
+    ctx.translate(-x, -pivotY);
+  }
+  if (hitFlash) ctx.globalAlpha = 0.6 + 0.4 * Math.sin(performance.now() / 50);
+
+  const w = 220;
+  const h = 200;
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, w * 0.34, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Rear tire (viewed from behind — vertical orientation)
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.ellipse(x, y - 18, 16, 26, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Tread sidewall
+  ctx.fillStyle = '#1f1f24';
+  ctx.beginPath();
+  ctx.ellipse(x, y - 18, 9, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Tread bands
+  ctx.strokeStyle = '#0a0a0a';
+  ctx.lineWidth = 1;
+  for (let i = -2; i <= 2; i++) {
+    const ty = y - 18 + i * 8;
+    ctx.beginPath();
+    ctx.moveTo(x - 14, ty);
+    ctx.lineTo(x + 14, ty);
+    ctx.stroke();
+  }
+  // Tiny highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(x - 5, y - 30, 2, 12);
+
+  // Exhaust
+  ctx.fillStyle = '#888';
+  ctx.fillRect(x - 70, y - 36, 22, 14);
+  ctx.fillStyle = '#444';
+  ctx.beginPath();
+  ctx.arc(x - 70, y - 29, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(x + 48, y - 36, 22, 14);
+  ctx.beginPath();
+  ctx.arc(x + 70, y - 29, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body fairing
+  const bodyGrad = ctx.createLinearGradient(x - 50, y - 110, x + 50, y - 30);
+  bodyGrad.addColorStop(0, '#dfe6f0');
+  bodyGrad.addColorStop(0.5, '#9ba6b8');
+  bodyGrad.addColorStop(1, '#3a4250');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(x - 50, y - 28);
+  ctx.lineTo(x - 60, y - 70);
+  ctx.lineTo(x - 28, y - 110);
+  ctx.lineTo(x + 28, y - 110);
+  ctx.lineTo(x + 60, y - 70);
+  ctx.lineTo(x + 50, y - 28);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tank stripe (purple/pink)
+  ctx.fillStyle = '#ff2bd6';
+  ctx.fillRect(x - 22, y - 95, 44, 8);
+
+  // Front fairing / windscreen
+  ctx.fillStyle = 'rgba(120, 200, 255, 0.4)';
+  ctx.beginPath();
+  ctx.moveTo(x - 24, y - 110);
+  ctx.lineTo(x - 14, y - 140);
+  ctx.lineTo(x + 14, y - 140);
+  ctx.lineTo(x + 24, y - 110);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Rider torso (Ron in black leather)
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.moveTo(x - 30, y - 90);
+  ctx.lineTo(x - 24, y - 158);
+  ctx.lineTo(x + 24, y - 158);
+  ctx.lineTo(x + 30, y - 90);
+  ctx.closePath();
+  ctx.fill();
+  // Leather highlight
+  ctx.strokeStyle = '#ff2bd6';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 90);
+  ctx.lineTo(x, y - 158);
+  ctx.stroke();
+
+  // Helmet
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.arc(x, y - 168, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#67d2ff';
+  ctx.fillRect(x - 12, y - 175, 24, 6);
+  // Helmet shine
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x + 6, y - 178, 4, 3);
+  // "RON" text on back
+  ctx.fillStyle = '#ff2bd6';
+  ctx.font = "bold 11px 'Courier New'";
+  ctx.fillText('RON', x, y - 130);
+  ctx.font = "bold 8px 'Courier New'";
+  ctx.fillStyle = '#fff';
+  ctx.fillText('CEO', x, y - 119);
+
+  // Tail lights
+  ctx.fillStyle = '#ff3344';
+  ctx.fillRect(x - 22, y - 28, 12, 6);
+  ctx.fillRect(x + 10, y - 28, 12, 6);
+  if (speed > MAX_SPEED * 0.8) {
+    ctx.shadowColor = '#ff3344';
+    ctx.shadowBlur = 16;
+    ctx.fillRect(x - 22, y - 28, 12, 6);
+    ctx.fillRect(x + 10, y - 28, 12, 6);
+    ctx.shadowBlur = 0;
+  }
+
+  // Boost flames
+  if (player.boostTimer > 0) {
+    const fs = 14 + Math.random() * 10;
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath();
+    ctx.moveTo(x - 70, y - 22);
+    ctx.lineTo(x - 70 - fs, y - 18);
+    ctx.lineTo(x - 70, y - 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ff7a3c';
+    ctx.beginPath();
+    ctx.moveTo(x + 70, y - 22);
+    ctx.lineTo(x + 70 + fs, y - 18);
+    ctx.lineTo(x + 70, y - 14);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function render() {
+  // Camera offset: applied as horizontal shake when hit
+  let camShakeX = 0, camShakeY = 0;
+  if (shake > 0) {
+    camShakeX = (Math.random() - 0.5) * shake * 16;
+    camShakeY = (Math.random() - 0.5) * shake * 8;
+  }
+  ctx.save();
+  ctx.translate(camShakeX, camShakeY);
+
+  drawSky();
+  drawGround();
+
+  const baseSegment = findSegment(player.z);
+  const basePercent = ((player.z) % SEG_LEN) / SEG_LEN;
+  const playerSegment = findSegment(player.z + PLAYER_Z);
+  const playerPercent = ((player.z + PLAYER_Z) % SEG_LEN) / SEG_LEN;
+  const playerY = interp(playerSegment.p1.world.y, playerSegment.p2.world.y, playerPercent);
+  let maxy = H;
+
+  let xWorld = 0;
+  let dx = -(baseSegment.curve * basePercent);
+
+  // Render road
+  for (let n = 0; n < DRAW_DIST; n++) {
+    const seg = segments[(baseSegment.index + n) % segments.length];
+    seg.looped = seg.index < baseSegment.index;
+    seg.fog = exponentialFog(n / DRAW_DIST, FOG_DENSITY * (1 + weatherIntensity * 1.5));
+
+    project(seg.p1, (player.x * ROAD_WIDTH) - xWorld, playerY + CAM_HEIGHT,
+            player.z - (seg.looped ? segments.length * SEG_LEN : 0), CAM_DEPTH, W, H, ROAD_WIDTH);
+    project(seg.p2, (player.x * ROAD_WIDTH) - xWorld - dx, playerY + CAM_HEIGHT,
+            player.z - (seg.looped ? segments.length * SEG_LEN : 0), CAM_DEPTH, W, H, ROAD_WIDTH);
+
+    xWorld = xWorld + dx;
+    dx = dx + seg.curve;
+
+    if (seg.p1.camera.z <= 0.1 || seg.p2.screen.y >= maxy || seg.p2.screen.y >= seg.p1.screen.y) continue;
+
+    renderRoadSegment(seg.p1, seg.p2, seg.color, seg.fog);
+    maxy = seg.p2.screen.y;
+  }
+
+  // Render sprites back to front
+  for (let n = DRAW_DIST - 1; n >= 0; n--) {
+    const seg = segments[(baseSegment.index + n) % segments.length];
+    if (seg.p1.camera.z <= 0.1) continue;
+    for (const sp of seg.sprites) {
+      if (sp.collected || sp.hit) continue;
+      renderSprite(sp, seg.p1, seg.p1.screen.w);
+    }
+    // Rivals on this segment range — reuse segment's projected basis so curves work
+    for (const r of rivals) {
+      const segZ = seg.index * SEG_LEN;
+      if (r.z >= segZ && r.z < segZ + SEG_LEN) {
+        const scale = seg.p1.screen.scale;
+        const sx = seg.p1.screen.x + (scale * r.x * ROAD_WIDTH * (W / 2));
+        const sy = seg.p1.screen.y;
+        const sw = scale * 380 * (W / 2);
+        const sh = scale * 380 * (W / 2);
+        drawRivalSprite(sx, sy, sw, sh, r.color, r.accent, r.spinoutAngle, r.nitroTimer > 0);
+      }
+    }
+  }
+
+  // Player bike (always front)
+  drawPlayerBike(W / 2, H - 40, player.speed, player.hitTimer > 0, player.spinoutAngle);
+
+  // Pickup floaters in front of bike, behind weather/HUD
+  renderFloaters();
+
+  // Speed lines / motion blur at high speed
+  if (player.speed > MAX_SPEED * 0.5) {
+    ctx.strokeStyle = `rgba(255,255,255,${(player.speed / MAX_SPEED - 0.5) * 0.4})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 12; i++) {
+      const lx = Math.random() * W;
+      const ly = H * 0.6 + Math.random() * H * 0.4;
+      const len = 8 + Math.random() * 30 * (player.speed / MAX_SPEED);
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(lx, ly + len);
+      ctx.stroke();
+    }
+  }
+
+  // Snow weather overlay — dense, multi-layer parallax
+  if (weatherIntensity > 0.05) {
+    // Cool blue-white tint
+    ctx.fillStyle = `rgba(200, 215, 240, ${0.24 * weatherIntensity})`;
+    ctx.fillRect(0, 0, W, H);
+    const t = performance.now() / 1000;
+    // Three parallax layers: distant (small, slow) → mid → near (big, fast)
+    const layers = [
+      { count: 140, sMin: 22,  sMax: 55,  rMin: 0.7, rMax: 1.6, alpha: 0.50, sway: 10, blur: 0 },
+      { count: 110, sMin: 60,  sMax: 110, rMin: 1.4, rMax: 2.6, alpha: 0.75, sway: 22, blur: 0 },
+      { count: 70,  sMin: 140, sMax: 230, rMin: 2.4, rMax: 4.2, alpha: 0.95, sway: 38, blur: 6 }
+    ];
+    for (const L of layers) {
+      const flakes = Math.floor(L.count * weatherIntensity);
+      const a = L.alpha * weatherIntensity;
+      ctx.fillStyle = `rgba(255, 255, 255, ${a})`;
+      if (L.blur) { ctx.shadowColor = '#ffffff'; ctx.shadowBlur = L.blur; }
+      for (let i = 0; i < flakes; i++) {
+        const seed = i * 137.5 + L.sMin * 7;
+        const baseX = (seed * 17) % W;
+        const sway = Math.sin(t * 0.7 + i * 0.5 + L.sMin) * L.sway;
+        const speed = L.sMin + (i % 9) * ((L.sMax - L.sMin) / 9);
+        const fall = ((t * speed + seed * 13) % (H + 80)) - 30;
+        const fx = ((baseX + sway) % W + W) % W;
+        const fy = fall;
+        const fr = L.rMin + ((i % 11) / 11) * (L.rMax - L.rMin);
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (L.blur) ctx.shadowBlur = 0;
+    }
+    // Faint horizontal wind streaks for the densest part of the storm
+    if (weatherIntensity > 0.5) {
+      ctx.strokeStyle = `rgba(220, 230, 250, ${0.18 * weatherIntensity})`;
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 30; i++) {
+        const sy = (i * 91 + (t * 60) % H) % H;
+        const sx = ((i * 137 + t * 80) % (W + 200)) - 100;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + 26, sy + 1);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Fade in
+  if (fadeIn > 0) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${fadeIn})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // 3 · 2 · 1 · GO! countdown
+  // Countdown visuals (gantry + 3/2/1/GO! text) draw whenever countdownTimer
+  // is still positive — that includes the brief window after the race has
+  // started where GO! is still flashing.
+  if (countdownTimer > 0 && (gameState === 'countdown' || gameState === 'racing')) {
+    let label, color, stepStart;
+    if (countdownTimer > 2.6)      { label = '3';   color = '#ff8de6'; stepStart = 3.6; }
+    else if (countdownTimer > 1.6) { label = '2';   color = '#ffd23f'; stepStart = 2.6; }
+    else if (countdownTimer > 0.6) { label = '1';   color = '#ffe14a'; stepStart = 1.6; }
+    else                           { label = 'GO!'; color = '#6dfcb1'; stepStart = 0.6; }
+    // Play a tone the first frame each beat begins — short beep on red
+    // beats, longer/higher beep on GO!
+    if (label !== lastCountdownLabel) {
+      if (label === 'GO!')  musicTone(1175, 0.55, 0.32);  // ~D6, longer
+      else                  musicTone(587,  0.16, 0.26);  // ~D5, short pip
+      lastCountdownLabel = label;
+    }
+    const elapsedInStep = stepStart - countdownTimer;
+    const popPhase = clamp(elapsedInStep / 0.25, 0, 1);     // 0..1 over first 0.25s
+    const settle = label === 'GO!' ? 1.35 : 1.25;
+    const popScale = 0.4 + (settle - 0.4) * (1 - Math.pow(1 - popPhase, 2));
+    const fadePhase = clamp((1 - elapsedInStep) / 0.4, 0, 1);
+    const alpha = label === 'GO!' ? clamp(0.6 - countdownTimer + 0.6, 0, 1) * fadePhase + (popPhase * (1 - fadePhase)) : (popPhase * 0.7 + 0.3) * (0.4 + 0.6 * fadePhase);
+
+    // ===== F1-style race start lights gantry =====
+    // 3 red bays light up sequentially during 3 → 2 → 1; on GO! they all
+    // extinguish (the lights going OUT is the start signal in real racing).
+    {
+      const cx = W / 2;
+      const cy = H / 2 - 160;
+      const housingW = 340;
+      const housingH = 92;
+      const bayR = 28;
+
+      // Mounting posts
+      ctx.fillStyle = '#2a2a2a';
+      ctx.fillRect(cx - housingW/2 - 6, cy + housingH/2 - 4, 8, 60);
+      ctx.fillRect(cx + housingW/2 - 2, cy + housingH/2 - 4, 8, 60);
+
+      // Housing body
+      ctx.fillStyle = '#141414';
+      ctx.fillRect(cx - housingW/2, cy - housingH/2, housingW, housingH);
+      ctx.strokeStyle = '#555';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(cx - housingW/2, cy - housingH/2, housingW, housingH);
+      // Top sheen
+      const sheen = ctx.createLinearGradient(0, cy - housingH/2, 0, cy);
+      sheen.addColorStop(0, 'rgba(255,255,255,0.10)');
+      sheen.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(cx - housingW/2, cy - housingH/2, housingW, housingH/2);
+
+      // Light states per countdown beat — bays extinguish one-by-one,
+      // and GO! is the moment all of them go dark (real-motorsport style).
+      const lit =
+        label === '3'   ? [true,  true,  true ] :
+        label === '2'   ? [true,  true,  false] :
+        label === '1'   ? [true,  false, false] :
+        /* GO! */         [false, false, false];
+
+      const bayDX = housingW * 0.30;
+      for (let i = 0; i < 3; i++) {
+        const bx = cx + (i - 1) * bayDX;
+        if (lit[i]) {
+          // Lit red bulb with glow
+          ctx.save();
+          ctx.shadowColor = '#ff3344';
+          ctx.shadowBlur = 38;
+          ctx.fillStyle = '#ff2233';
+          ctx.beginPath();
+          ctx.arc(bx, cy, bayR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          // Inner highlight
+          ctx.fillStyle = '#ffaaaa';
+          ctx.beginPath();
+          ctx.arc(bx - bayR * 0.32, cy - bayR * 0.32, bayR * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Off bulb — dark with faint dimensional shading
+          ctx.fillStyle = '#0c0c0c';
+          ctx.beginPath();
+          ctx.arc(bx, cy, bayR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(60, 8, 12, 0.55)';
+          ctx.beginPath();
+          ctx.arc(bx, cy, bayR * 0.72, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Bay rim
+        ctx.strokeStyle = '#404040';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(bx, cy, bayR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // Only the "GO!" beat gets the big text — the 3/2/1 beats are
+    // communicated entirely by the gantry above.
+    if (label === 'GO!') {
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      ctx.scale(popScale, popScale);
+      ctx.globalAlpha = clamp(alpha, 0, 1);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Glow halo
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 40;
+      ctx.fillStyle = color;
+      ctx.font = `900 150px 'Courier New'`;
+      ctx.fillText(label, 0, 0);
+      ctx.shadowBlur = 0;
+      // Inner highlight
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = clamp(alpha * 0.7, 0, 1);
+      ctx.font = `900 150px 'Courier New'`;
+      ctx.fillText(label, 0, -4);
+      ctx.restore();
+    }
+
+    // Subtle "READY" tag while counting
+    if (label !== 'GO!') {
+      ctx.save();
+      ctx.fillStyle = '#67d2ff';
+      ctx.font = "bold 16px 'Courier New'";
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText('GET READY', W / 2, H / 2 + 110);
+      ctx.restore();
+    }
+  }
+
+  // Boost-ready indicator
+  if (player.boost > 0) {
+    for (let i = 0; i < player.boost; i++) {
+      ctx.fillStyle = '#ffd23f';
+      ctx.shadowColor = '#ffd23f';
+      ctx.shadowBlur = 8;
+      ctx.fillRect(W - 24 - i * 14, H - 24, 10, 14);
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = '#fff';
+    ctx.font = "9px 'Courier New'";
+    ctx.textAlign = 'right';
+    ctx.fillText('AI BOOST [SPACE]', W - 14, H - 32);
+  }
+
+  ctx.restore();
+}
+
+// =====================================================================
+// MAIN LOOP
+// =====================================================================
+function loop(t) {
+  const dt = Math.min(0.05, (t - lastTime) / 1000);
+  lastTime = t;
+
+  if (gameState === 'racing' || gameState === 'countdown') update(dt);
+  render();
+
+  if (gameState === 'racing' || gameState === 'countdown') requestAnimationFrame(loop);
+}
+
+// =====================================================================
+// INIT (background animation behind title)
+// =====================================================================
+function initStars() {
+  stars = [];
+  for (let i = 0; i < 80; i++) {
+    stars.push({ x: Math.random() * W, y: Math.random() * H * 0.5, r: Math.random() < 0.3 ? 2 : 1, tw: 0.4 + Math.random() * 0.6 });
+  }
+}
+
+function initBuildings() {
+  buildings = [];
+  const layout = [
+    [80, 80, 24], [110, 60, 16], [140, 90, 30], [180, 50, 18],
+    [200, 110, 34], [240, 70, 22], [275, 95, 28], [310, 60, 16],
+    [340, 130, 40], [385, 80, 22], [420, 100, 30], [455, 65, 18],
+    [490, 120, 36], [535, 70, 22], [575, 95, 30], [615, 110, 34],
+    [665, 75, 24], [710, 85, 28], [760, 130, 38], [820, 70, 20], [870, 100, 30]
+  ];
+  for (const [x, h, w] of layout) {
+    const wins = [];
+    for (let r = 0; r < h / 8; r++) {
+      for (let c = 0; c < w / 6; c++) {
+        if (Math.random() < 0.18) wins.push([r, c]);
+      }
+    }
+    buildings.push({ x, h, w, windows: wins });
+  }
+}
+
+function titleLoop() {
+  if (gameState !== 'title') return;
+  // Twinkle stars
+  for (const s of stars) {
+    s.tw += (Math.random() - 0.5) * 0.05;
+    s.tw = clamp(s.tw, 0.2, 1);
+  }
+  drawSky();
+  drawGround();
+  // animated motorcycle preview
+  drawPlayerBike(W / 2, H - 80, MAX_SPEED * 0.6, false);
+  requestAnimationFrame(titleLoop);
+}
+
+initStars();
+initBuildings();
+buildTrack(); // pre-build for visual preview behind title
+spawnRivals();
+resetPlayer();
+titleLoop();
+
+})();
+</script>
+</body>
+</html>
