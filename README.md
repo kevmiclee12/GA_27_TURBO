@@ -6,7 +6,7 @@ A pseudo-3D synthwave arcade racer starring Ron, the iConnections CEO, racing
 his motorcycle to **Global Alts Miami** through neon Miami nights. Collect
 Sponsors, Fund Managers, Allocators, and AI Boost charges. Dodge phishing
 emails, platform outages, and snowstorms. Beat Apexion and Konnexxt to the
-finish line.
+finish line. The road to Global Alts is never smooth.
 
 [Play in your browser](https://kevmiclee12.github.io/GA_27_TURBO/)
 
