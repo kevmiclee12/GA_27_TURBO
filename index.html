@@ -1542,6 +1542,10 @@ function musicPad(freqs, t, dur) {
 // GAME LIFECYCLE
 // =====================================================================
 function startGame() {
+  // Clear any toast left over from the previous race so it doesn't persist
+  hud.toast.style.opacity = '0';
+  hud.toast.textContent = '';
+  toastTimer = 0;
   buildTrack();
   spawnRivals();
   resetPlayer();
@@ -1980,8 +1984,90 @@ function update(dt) {
     const nitroMul = r.nitroTimer > 0 ? 1.45 : 1.0;
     r.z += dt * r.speed * nitroMul;
     if (r.hitCool > 0) r.hitCool -= dt;
-    // gentle weave
-    r.x += Math.sin(r.z * 0.0003 + (r.name === 'CAP' ? 0 : 1.5)) * dt * 0.4;
+    // ===== Rival AI — hazard avoidance is the HIGHER PRIORITY than pickups =====
+    // Two-pass logic:
+    //   1. Scan the immediate look-ahead for any outage/snow currently
+    //      sitting in the rival's collision lane. If we find one, dodge
+    //      AWAY from it and ignore pickups on this frame.
+    //   2. Otherwise, hunt for the best pickup whose approach path is
+    //      hazard-free. Pickups whose lateral approach would cross an
+    //      outage/snow icon are skipped entirely. Fall back to a gentle
+    //      weave when there's nothing safe and worthwhile ahead.
+    {
+      const rSegIdx = Math.floor(r.z / SEG_LEN);
+
+      // ---- Pass 1: dodge incoming hazards ----
+      let dodgeTargetX = null;
+      let dodgeUrgency = 0;
+      const dodgeWindow = 4;
+      for (let k = 1; k <= dodgeWindow; k++) {
+        const seg = segments[(rSegIdx + k) % segments.length];
+        for (const h of seg.sprites) {
+          if (h.collected || h.hit) continue;
+          if (h.kind !== 'outage' && h.kind !== 'snow') continue;
+          const dx = Math.abs(h.offset - r.x);
+          if (dx >= 0.32) continue;                 // outside the collision lane
+          const urgency = (1 / (k + 0.3)) * (0.32 - dx);
+          if (urgency > dodgeUrgency) {
+            dodgeUrgency = urgency;
+            const dir = h.offset > r.x ? -1 : 1;    // steer to opposite side
+            dodgeTargetX = clamp(h.offset + dir * 0.5, -0.78, 0.78);
+          }
+        }
+      }
+
+      if (dodgeTargetX !== null) {
+        // Hazard avoidance overrides everything else
+        const diff = dodgeTargetX - r.x;
+        const steer = Math.sign(diff) * Math.min(Math.abs(diff), 1.6 * dt);
+        r.x += steer;
+      } else {
+        // ---- Pass 2: seek best pickup whose approach is hazard-free ----
+        const seekAhead = 7;
+        let bestTarget = null;
+        let bestScore = -Infinity;
+        for (let k = 1; k <= seekAhead; k++) {
+          const seg = segments[(rSegIdx + k) % segments.length];
+          for (const s of seg.sprites) {
+            if (s.collected || s.hit) continue;
+            let value = 0;
+            if      (s.kind === 'nitro')     value = 900;
+            else if (s.kind === 'sponsor')   value = 700;
+            else if (s.kind === 'allocator') value = 500;
+            else if (s.kind === 'fm')        value = 300;
+            else continue;                            // hazards / phishing skipped here
+            const dx = Math.abs(s.offset - r.x);
+            if (dx > 0.85) continue;
+            // Path-safety check: skip any pickup whose lateral approach
+            // crosses a hazard in any closer segment.
+            let pathSafe = true;
+            const minX = Math.min(r.x, s.offset) - 0.04;
+            const maxX = Math.max(r.x, s.offset) + 0.04;
+            for (let j = 1; j <= k && pathSafe; j++) {
+              const cs = segments[(rSegIdx + j) % segments.length];
+              for (const h of cs.sprites) {
+                if (h.collected || h.hit) continue;
+                if (h.kind !== 'outage' && h.kind !== 'snow') continue;
+                if (h.offset >= minX && h.offset <= maxX) { pathSafe = false; break; }
+              }
+            }
+            if (!pathSafe) continue;
+            const distFactor = 1 / (k + 0.4);
+            const reachCost  = dx * 1.3 + 0.15;
+            const score = (value / reachCost) * distFactor;
+            if (score > bestScore) { bestScore = score; bestTarget = s; }
+          }
+        }
+        if (bestTarget && bestScore > 0) {
+          const diff = bestTarget.offset - r.x;
+          const steer = Math.sign(diff) * Math.min(Math.abs(diff), 1.4 * dt);
+          r.x += steer;
+        } else {
+          // No safe pickup target — gentle weave so they aren't pinned
+          r.x += Math.sin(r.z * 0.0003 + (r.name === 'APEXION' ? 0 : 1.5)) * dt * 0.4;
+        }
+      }
+    }
     r.x = clamp(r.x, -0.85, 0.85);
     // Rivals interact with pickups (sponsors / FMs / allocators) and with the
     // physical hazards (snow, outage). Hazards still do NOT trigger the
