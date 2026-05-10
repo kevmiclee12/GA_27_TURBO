@@ -744,13 +744,13 @@ function spawnRivals() {
     { name: 'APEXION',  color: '#ff5577', accent: '#ffaa66', x: -0.4, z: 0,
       // Rivals launch off the line at 60% of MAX_SPEED, then the
       // recovery code in update() pulls them up to baseSpeed.
-      speed: MAX_SPEED * 0.6, baseSpeed: MAX_SPEED * 0.946,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.946,
       score: 0, hitCool: 0, hazardCool: 0,
       spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
       nitroTimer: 0,
       finishTime: null },
     { name: 'KONNEXXT', color: '#66ffaa', accent: '#aaffd2', x:  0.4, z: 0,
-      speed: MAX_SPEED * 0.6, baseSpeed: MAX_SPEED * 0.938,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.938,
       score: 0, hitCool: 0, hazardCool: 0,
       spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
       nitroTimer: 0,
@@ -1557,6 +1557,8 @@ function startGame() {
   preAccelPressTime = null;
   preAccelGoTime = null;
   preAccelBonusAwarded = false;
+  toastTimer = 0;
+  hud.toast.style.opacity = '0';
   document.getElementById('title').classList.add('hidden');
   document.getElementById('end').classList.add('hidden');
   gameState = 'countdown';
