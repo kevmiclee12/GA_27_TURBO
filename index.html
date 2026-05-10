@@ -1753,19 +1753,19 @@ function tryBoost() {
 
 // Award a STARTING-SPEED bonus based on how closely the first UP press
 // matches GO!. Press exactly on GO → start the race at MAX_SPEED. The
-// bonus tapers linearly to zero at ±500ms; outside that ±0.5s window
+// bonus tapers linearly to zero at ±350ms; outside that ±0.35s window
 // there's no bonus and the player starts from a standstill.
 function awardPreAccelBonus() {
   if (preAccelPressTime === null || preAccelGoTime === null) return;
   const offsetMs = Math.abs(preAccelPressTime - preAccelGoTime);
-  if (offsetMs > 500) return; // outside the ±0.5s window — no bonus, no toast
-  const factor = 1 - offsetMs / 500;          // 1.0 at GO, 0.0 at ±500ms
+  if (offsetMs > 350) return; // outside the ±0.35s window — no bonus, no toast
+  const factor = 1 - offsetMs / 350;          // 1.0 at GO, 0.0 at ±350ms
   player.speed = factor * MAX_SPEED;
   // Tier-named feedback toast
   let msg, color;
   if      (offsetMs <= 50)  { msg = 'PERFECT START!'; color = '#ffd23f'; }
   else if (offsetMs <= 150) { msg = 'GREAT START!';   color = '#3ddcff'; }
-  else if (offsetMs <= 300) { msg = 'GOOD START';     color = '#6dfcb1'; }
+  else if (offsetMs <= 250) { msg = 'GOOD START';     color = '#6dfcb1'; }
   else                      { msg = 'OK START';       color = '#bbcfff'; }
   showToast(msg, color, 2.0);
 }
