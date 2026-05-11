@@ -60,6 +60,47 @@
     transition: transform 0.1s;
   }
   button:hover { transform: scale(1.05); }
+  /* Difficulty picker on title + end screens. Pill row with one selected. */
+  .difficulty-picker { margin-top: 22px; }
+  .difficulty-picker .diff-label {
+    color: #ff2bd6; font-size: 11px; letter-spacing: 4px;
+    text-align: center; margin-bottom: 8px;
+  }
+  .difficulty-picker .diff-row {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  }
+  .diff-pill {
+    background: rgba(0, 0, 0, 0.5);
+    color: #b3eaff;
+    border: 2px solid rgba(103, 210, 255, 0.5);
+    padding: 8px 16px;
+    font-size: 12px; font-family: inherit; cursor: pointer;
+    letter-spacing: 3px; margin-top: 0;
+    box-shadow: none;
+    transition: all 0.15s;
+    min-width: 90px;
+  }
+  .diff-pill:hover { transform: scale(1.04); border-color: #67d2ff; color: #fff; }
+  .diff-pill.selected[data-diff="easy"] {
+    background: linear-gradient(180deg, #2cd584, #0e6e3e);
+    border-color: #6effb7; color: #fff;
+    box-shadow: 0 0 14px rgba(46, 213, 132, 0.65);
+  }
+  .diff-pill.selected[data-diff="normal"] {
+    background: linear-gradient(180deg, #3aa6ff, #0e4d8a);
+    border-color: #8ecbff; color: #fff;
+    box-shadow: 0 0 14px rgba(58, 166, 255, 0.65);
+  }
+  .diff-pill.selected[data-diff="hard"] {
+    background: linear-gradient(180deg, #ff9a3a, #a8480e);
+    border-color: #ffc283; color: #fff;
+    box-shadow: 0 0 14px rgba(255, 154, 58, 0.65);
+  }
+  .diff-pill.selected[data-diff="nightmare"] {
+    background: linear-gradient(180deg, #ff2bd6, #6b0080);
+    border-color: #ff8de6; color: #fff;
+    box-shadow: 0 0 18px rgba(255, 43, 214, 0.85);
+  }
   .hud {
     position: absolute; top: 10px; left: 10px; right: 10px;
     display: flex; justify-content: space-between; align-items: flex-start;
@@ -140,7 +181,11 @@
       linear-gradient(180deg, transparent 0%, transparent 50%, #2a8eb8 50%, #1a6c95 70%, transparent 70%),
       linear-gradient(180deg, #ff8488 0%, #ffaa6f 30%, #ffd874 50%, #ffd874 100%);
     overflow: hidden;
-    padding-top: 130px;
+    /* Stack from the top with enough padding that the iConnections logo
+       (absolute, top: 22px, 100px tall — bottom at y=122) sits alone at
+       the top of the screen, with WELCOME TO MIAMI starting below it. */
+    justify-content: flex-start;
+    padding-top: 150px;
   }
   .miami-end .palm {
     position: absolute; bottom: -10px; height: 360px; width: 220px;
@@ -331,6 +376,38 @@
     font-size: 12px; letter-spacing: 1px; font-weight: 600;
   }
   .player-haul .haul-pill b { font-size: 16px; margin-left: 4px; }
+
+  /* ===== Difficulty selection modal (shown after RACE AGAIN) ===== */
+  .modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(2, 0, 12, 0.78);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .modal-backdrop.hidden { display: none; }
+  .modal-card {
+    background: linear-gradient(180deg, rgba(40,0,60,0.96), rgba(10,0,30,0.96));
+    border: 2px solid #ff2bd6;
+    box-shadow: 0 0 30px rgba(255,43,214,0.55),
+                inset 0 0 12px rgba(255,43,214,0.2);
+    padding: 30px 44px 26px;
+    text-align: center;
+    border-radius: 8px;
+    min-width: 480px;
+  }
+  .modal-title {
+    color: #ff2bd6; font-size: 14px; letter-spacing: 6px;
+    margin-bottom: 22px; text-shadow: 0 0 8px rgba(255,43,214,0.7);
+  }
+  .modal-card .difficulty-picker { margin-top: 0; margin-bottom: 6px; }
+  .modal-card .difficulty-picker .diff-label { display: none; }
+  .modal-card button#modalStartBtn { margin-top: 22px; }
+  .modal-hint {
+    color: #67d2ff; font-size: 10px; letter-spacing: 3px;
+    margin-top: 14px; opacity: 0.65;
+  }
 </style>
 </head>
 <body>
@@ -398,8 +475,8 @@
   <div class="leader" id="leaderboard">
     <div class="label">RACE TO MIAMI</div>
     <div class="row you"><span>RON (YOU)</span><span id="lbRon">0%</span></div>
-    <div class="row"><span style="color:#ff6666">APEXION</span><span id="lbRival1">0%</span></div>
-    <div class="row"><span style="color:#66ffaa">KONNEXXT</span><span id="lbRival2">0%</span></div>
+    <!-- Rival rows are injected dynamically by rebuildLeaderboard() based
+         on the current rivals[] array. -->
   </div>
 
   <div class="toast" id="toast"></div>
@@ -423,6 +500,15 @@
       <span class="key">↑</span> ACCELERATE &nbsp;
       <span class="key">↓</span> BRAKE &nbsp;
       <span class="key">SPACE</span> AI BOOST
+    </div>
+    <div class="difficulty-picker" data-diff-picker>
+      <div class="diff-label">DIFFICULTY</div>
+      <div class="diff-row">
+        <button type="button" class="diff-pill" data-diff="easy">EASY</button>
+        <button type="button" class="diff-pill selected" data-diff="normal">NORMAL</button>
+        <button type="button" class="diff-pill" data-diff="hard">HARD</button>
+        <button type="button" class="diff-pill" data-diff="nightmare">NIGHTMARE</button>
+      </div>
     </div>
     <button id="startBtn">START RACE</button>
   </div>
@@ -497,9 +583,28 @@
     <!-- iConnections logo -->
     <img class="miami-logo" id="endLogo" src="assets/icon_logo.svg" alt="iConnections">
     <h1 id="endTitle">WELCOME TO MIAMI</h1>
-    <div class="miami-sub">RIDE · FUND · WIN · REPEAT</div>
     <div id="endStats" style="margin: 14px 0;"></div>
     <button id="restartBtn">RACE AGAIN</button>
+  </div>
+
+  <!-- Difficulty selection modal — shown after RACE AGAIN is clicked.
+       Reuses the same .difficulty-picker / .diff-pill styles + the same
+       data-diff-picker wrapper so selectDifficulty() keeps every picker
+       (title + modal) in sync. -->
+  <div id="difficultyModal" class="modal-backdrop hidden">
+    <div class="modal-card" data-diff-picker>
+      <div class="modal-title">SELECT DIFFICULTY</div>
+      <div class="difficulty-picker">
+        <div class="diff-row">
+          <button type="button" class="diff-pill" data-diff="easy">EASY</button>
+          <button type="button" class="diff-pill selected" data-diff="normal">NORMAL</button>
+          <button type="button" class="diff-pill" data-diff="hard">HARD</button>
+          <button type="button" class="diff-pill" data-diff="nightmare">NIGHTMARE</button>
+        </div>
+      </div>
+      <button type="button" id="modalStartBtn">START RACE</button>
+      <div class="modal-hint">click outside to cancel</div>
+    </div>
   </div>
 </div>
 
@@ -529,6 +634,27 @@ const CENTRIFUGAL = 0.3;
 const TRACK_SEGMENTS = 4500;
 const TRACK_LENGTH = TRACK_SEGMENTS * SEG_LEN;
 const PLAYER_Z = (CAM_HEIGHT * CAM_DEPTH);
+
+// =====================================================================
+// DIFFICULTY
+// =====================================================================
+// Per-level knobs:
+//   speedMul     — multiplier applied to each rival's baseSpeed at spawn
+//   missChance   — probability per frame that a rival "doesn't notice"
+//                  a non-nitro pickup it could otherwise see
+//   awareness    — lateral max-dx for non-nitro pickups (1 ≈ full road)
+//   steerSpeed   — max lateral steering rate while chasing pickups
+//   hazardBoost  — > 1.0 in Nightmare to up phishing / outage / snow
+//                  frequency; track sprite distribution is otherwise
+//                  identical across levels
+const DIFFICULTY = {
+  easy:      { label: 'EASY',      speedMul: 0.85, missChance: 0.50, awareness: 0.40, steerSpeed: 0.85, hazardBoost: 1.0 },
+  normal:    { label: 'NORMAL',    speedMul: 0.9, missChance: 0.25, awareness: 0.55, steerSpeed: 1.15, hazardBoost: 1.0 },
+  hard:      { label: 'HARD',      speedMul: 1.00, missChance: 0.10, awareness: 0.75, steerSpeed: 1.45, hazardBoost: 1.0 },
+  nightmare: { label: 'NIGHTMARE', speedMul: 1.04, missChance: 0.00, awareness: 0.90, steerSpeed: 1.75, hazardBoost: 1.6 },
+};
+let currentDifficulty = 'normal';
+function diff() { return DIFFICULTY[currentDifficulty]; }
 
 // =====================================================================
 // STATE
@@ -711,21 +837,32 @@ function placeSprites() {
 
     const r = Math.random();
     let kind;
-    // 5% nitro + 95% everything else (66/34 pickups/hazards inside that 95%).
-    //   FM        ≈ 40.5%  →  cum 0.405
-    //   Allocator ≈ 20.2%  →  cum 0.607
-    //   Sponsor   ≈  2.0%  →  cum 0.627
-    //   Phishing  ≈ 16.2%  →  cum 0.789
-    //   Outage    ≈  9.7%  →  cum 0.886
-    //   Snow      ≈  6.5%  →  cum 0.950
-    //   Nitro     =  5.0%  →  cum 1.000
-    if (r < 0.405)       kind = 'allocator';
-    else if (r < 0.607)  kind = 'fm';
-    else if (r < 0.627)  kind = 'sponsor';
-    else if (r < 0.789)  kind = 'phishing';
-    else if (r < 0.886)  kind = 'outage';
-    else if (r < 0.950)  kind = 'snow';
-    else                 kind = 'nitro';
+    // Standard distribution (Easy / Normal / Hard share this table — the
+    // user requested item distribution stay identical across those).
+    //   Allocator ≈ 40.5%   FM ≈ 20.2%   Sponsor ≈ 2.0%
+    //   Phishing  ≈ 16.2%   Outage ≈ 9.7%   Snow ≈ 6.5%   Nitro = 5.0%
+    //
+    // Nightmare bumps hazard frequency up roughly 1.6× by stealing share
+    // from allocators and FMs. Sponsors and nitro stay roughly the same.
+    if (currentDifficulty === 'nightmare') {
+      //   Allocator ≈ 28%   FM ≈ 13%    Sponsor ≈ 2%
+      //   Phishing  ≈ 25%   Outage ≈ 16%   Snow ≈ 12%   Nitro = 4%
+      if (r < 0.28)       kind = 'allocator';
+      else if (r < 0.41)  kind = 'fm';
+      else if (r < 0.43)  kind = 'sponsor';
+      else if (r < 0.68)  kind = 'phishing';
+      else if (r < 0.84)  kind = 'outage';
+      else if (r < 0.96)  kind = 'snow';
+      else                kind = 'nitro';
+    } else {
+      if (r < 0.405)       kind = 'allocator';
+      else if (r < 0.607)  kind = 'fm';
+      else if (r < 0.627)  kind = 'sponsor';
+      else if (r < 0.789)  kind = 'phishing';
+      else if (r < 0.886)  kind = 'outage';
+      else if (r < 0.950)  kind = 'snow';
+      else                 kind = 'nitro';
+    }
     seg.sprites.push({ kind, offset: chosenOffset, collected: false, hit: false });
     recent.push({ idx: i, offset: chosenOffset });
     // Drop entries that are no longer in the look-back window
@@ -737,25 +874,59 @@ function placeSprites() {
 // RIVALS
 // =====================================================================
 function spawnRivals() {
-  // Track length is ~900,000 units. To finish in ~155 sec at constant speed:
-  //   needed speed = 900000 / 155 ≈ 5806 units/sec ≈ MAX_SPEED * 0.484
-  // Give Apexion a hair more pace than Konnexxt.
+  // Difficulty's speedMul scales every rival's baseSpeed proportionally.
+  // The starting speed remains at 80% of MAX_SPEED so the off-the-line
+  // launch animation feels the same across difficulties.
+  const sm = diff().speedMul;
   rivals = [
-    { name: 'APEXION',  color: '#ff5577', accent: '#ffaa66', x: -0.4, z: 0,
-      // Rivals launch off the line at 60% of MAX_SPEED, then the
+    { name: 'APEXION',  color: '#ff5577', accent: '#ffaa66', x: -0.25, z: 0,
+      // Rivals launch off the line at 80% of MAX_SPEED, then the
       // recovery code in update() pulls them up to baseSpeed.
-      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.946,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.946 * sm,
       score: 0, hitCool: 0, hazardCool: 0,
       spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
       nitroTimer: 0,
       finishTime: null },
-    { name: 'KONNEXXT', color: '#66ffaa', accent: '#aaffd2', x:  0.4, z: 0,
-      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.938,
+    { name: 'KONNEXXT', color: '#66ffaa', accent: '#aaffd2', x:  0.25, z: 0,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.938 * sm,
       score: 0, hitCool: 0, hazardCool: 0,
       spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
       nitroTimer: 0,
-      finishTime: null }
+      finishTime: null },
+    { name: 'UNCORREL8ED', color: '#F5F7FA', accent: '#5E6875', x:  0.5, z: 0,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.954 * sm,
+      score: 0, hitCool: 0, hazardCool: 0,
+      spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
+      nitroTimer: 0,
+      finishTime: null },
   ];
+  rebuildLeaderboard();
+}
+
+// Rebuilds the in-race progress box ("RACE TO MIAMI") so it has one row
+// per spawned rival. Adding a new rival to spawnRivals() automatically
+// shows up here — no markup edits required.
+function rebuildLeaderboard() {
+  const board = document.getElementById('leaderboard');
+  if (!board) return;
+  // Remove any previously injected rival rows. We keep the .label row and
+  // the RON (.you) row in place.
+  board.querySelectorAll('.row.rival').forEach(el => el.remove());
+  if (!hud) return; // initial module-load order safety
+  hud.rivals = [];
+  for (const r of rivals) {
+    const row = document.createElement('div');
+    row.className = 'row rival';
+    const nameSpan = document.createElement('span');
+    nameSpan.style.color = r.color;
+    nameSpan.textContent = r.name;
+    const pctSpan = document.createElement('span');
+    pctSpan.textContent = '0%';
+    row.appendChild(nameSpan);
+    row.appendChild(pctSpan);
+    board.appendChild(row);
+    hud.rivals.push(pctSpan);
+  }
 }
 
 // =====================================================================
@@ -1608,14 +1779,13 @@ function getIconnectionsLogoSVG(size) {
 }
 
 function endGame() {
-  // The race only ends when the player crosses the finish line. We then
-  // freeze every racer's score using a TIME-BASED penalty:
+  // The race ends when the player crosses the finish line. We then freeze
+  // every racer's score and award placement bonuses:
   //
-  //   • The first racer to cross the line ("first place") never has a
-  //     penalty.
-  //   • Everyone else loses (their finish time − first place time) × 20
-  //     points, where time is measured in seconds.
-  //   • If a rival hasn't actually finished by the time the player does, we
+  //   • 1st place: +2500    2nd: +1000    3rd: +500    everyone else: 0
+  //   • Bonuses are summed into r.bonus so later triggers (e.g. perfect
+  //     race, hazard-free run) can stack onto the same column.
+  //   • If a rival hasn't actually finished by the time the player does we
   //     extrapolate their finish time from their current position using
   //     their max (base) speed.
   gameState = 'finished';
@@ -1643,41 +1813,42 @@ function endGame() {
     return elapsed + dist / r.baseSpeed;
   };
 
+  // Rival rows are derived from the rivals[] array so the end-screen
+  // leaderboard scales automatically with however many rivals were
+  // spawned by spawnRivals().
   const racers = [
     { name: 'RON (YOU)', isPlayer: true,
       raw: player.score,
       progress: clamp(player.z / trackTotal, 0, 1) * 100,
       time: playerTimeS, didFinish: !!player.finishTime,
       color: '#ffe27f' },
-    { name: 'APEXION', isPlayer: false,
-      raw: rivals[0].score,
-      progress: clamp(rivals[0].z / trackTotal, 0, 1) * 100,
-      time: rivalTimeS(rivals[0]), didFinish: !!rivals[0].finishTime,
-      color: '#ff8da0' },
-    { name: 'KONNEXXT', isPlayer: false,
-      raw: rivals[1].score,
-      progress: clamp(rivals[1].z / trackTotal, 0, 1) * 100,
-      time: rivalTimeS(rivals[1]), didFinish: !!rivals[1].finishTime,
-      color: '#9bf5c8' }
+    ...rivals.map(r => ({
+      name: r.name,
+      isPlayer: false,
+      raw: r.score,
+      progress: clamp(r.z / trackTotal, 0, 1) * 100,
+      time: rivalTimeS(r),
+      didFinish: !!r.finishTime,
+      color: r.color
+    }))
   ];
 
-  // First place = lowest finish time. The winner has no penalty.
-  const winnerTime = Math.min.apply(null, racers.map(r => r.time));
-  const winner = racers.find(r => r.time === winnerTime);
-  winner.isFirst = true;
-  // First place collects a +2500 finish bonus. We keep it separate from
-  // raw so the SCORE column still shows the actual race-earned points
-  // and the bonus is visibly added in when computing FINAL.
-  winner.bonus = 2500;
+  // Award finish-place bonuses (1st / 2nd / 3rd) based on race time. Other
+  // bonus triggers can be added to r.bonus later — we keep it as a single
+  // additive column so the math stays visible on the end screen.
+  const FINISH_BONUSES = [2500, 1000, 500];
+  const byTime = [...racers].sort((a, b) => a.time - b.time);
+  byTime.forEach((r, idx) => {
+    r.bonus = (r.bonus || 0) + (FINISH_BONUSES[idx] || 0);
+  });
+  byTime[0].isFirst = true;
 
   for (const r of racers) {
-    const deltaS = Math.max(0, r.time - winnerTime);
-    r.penalty = Math.round(deltaS * 450);
-    r.final   = r.raw + (r.bonus || 0) - r.penalty;
+    r.final = r.raw + (r.bonus || 0);
   }
 
-  // Leaderboard ranked by final score (winner of the race may not be the
-  // winner of the leaderboard if their raw score was low).
+  // Leaderboard ranked by final score (the race winner may not be the
+  // leaderboard winner if their raw score was low).
   const sorted = [...racers].sort((a, b) => b.final - a.final);
 
   // The iConnections logo is a static <img> in the markup (assets/icon_logo.svg)
@@ -1686,19 +1857,22 @@ function endGame() {
   let body = '';
 
   body += '<table class="leaderboard-table"><thead><tr>';
-  body += '<th>RANK</th><th style="text-align:left;padding-left:14px">RACER</th><th>TIME</th><th>SCORE</th><th>PENALTY</th><th>FINAL</th>';
+  body += '<th>RANK</th><th style="text-align:left;padding-left:14px">RACER</th><th>TIME</th><th>SCORE</th><th>BONUS</th><th>FINAL</th>';
   body += '</tr></thead><tbody>';
-  const medals = ['🏆', '🥈', '🥉'];
+  const medals = ['🏆 1', '🥈 2', '🥉 3', '  4'];
   sorted.forEach((r, idx) => {
     const cls = (idx === 0 ? 'first ' : '') + (r.isPlayer ? 'you' : '');
     const timeText = `${r.time.toFixed(1)}s`;
-    const flag = r.isFirst ? ` 🏁 <span style="color:#ffd23f;font-size:10px">+${(r.bonus || 0).toLocaleString()}</span>` : '';
+    const bonusText = r.bonus > 0
+      ? `<span style="color:#ffd23f">+${r.bonus.toLocaleString()}</span>`
+      : '0';
+    const flag = r.isFirst ? ' 🏁' : '';
     body += `<tr class="${cls}">`;
     body += `<td>${medals[idx]}</td>`;
     body += `<td class="racer" style="color:${r.color}">${r.name}${flag}</td>`;
     body += `<td>${timeText}</td>`;
     body += `<td>${r.raw.toLocaleString()}</td>`;
-    body += `<td>${r.penalty > 0 ? '−' + r.penalty.toLocaleString() : '0'}</td>`;
+    body += `<td>${bonusText}</td>`;
     body += `<td class="final">${r.final.toLocaleString()}</td>`;
     body += '</tr>';
   });
@@ -1745,7 +1919,51 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
 document.getElementById('startBtn').addEventListener('click', startGame);
-document.getElementById('restartBtn').addEventListener('click', startGame);
+
+// Wire up every difficulty pill on every picker (title + modal) to a
+// shared currentDifficulty setting. Clicking any pill highlights the
+// matching pill on every picker so they stay in sync.
+function selectDifficulty(level) {
+  if (!DIFFICULTY[level]) return;
+  currentDifficulty = level;
+  document.querySelectorAll('[data-diff-picker] .diff-pill').forEach(p => {
+    p.classList.toggle('selected', p.getAttribute('data-diff') === level);
+  });
+}
+document.querySelectorAll('[data-diff-picker] .diff-pill').forEach(pill => {
+  pill.addEventListener('click', () => selectDifficulty(pill.getAttribute('data-diff')));
+});
+
+// ===== Difficulty modal (post-race) =====
+// RACE AGAIN no longer starts a race directly — it pops the modal so the
+// player can change difficulty between races. The modal's START RACE
+// button kicks off startGame() once the player confirms.
+const difficultyModal = document.getElementById('difficultyModal');
+function showDifficultyModal() {
+  // Sync the modal's pills to whatever currentDifficulty is right now
+  // (carrying over the previous race's selection as the default).
+  selectDifficulty(currentDifficulty);
+  difficultyModal.classList.remove('hidden');
+}
+function hideDifficultyModal() {
+  difficultyModal.classList.add('hidden');
+}
+document.getElementById('restartBtn').addEventListener('click', showDifficultyModal);
+document.getElementById('modalStartBtn').addEventListener('click', () => {
+  hideDifficultyModal();
+  startGame();
+});
+// Clicking the backdrop (but not the card itself) closes the modal so
+// players can back out to inspect the end-screen leaderboard again.
+difficultyModal.addEventListener('click', (e) => {
+  if (e.target === difficultyModal) hideDifficultyModal();
+});
+// ESC also closes the modal.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !difficultyModal.classList.contains('hidden')) {
+    hideDifficultyModal();
+  }
+});
 
 function tryBoost() {
   if (player.boost > 0 && player.boostTimer <= 0) {
@@ -1785,22 +2003,27 @@ const hud = {
   fms: document.getElementById('hudFMs'),
   allocs: document.getElementById('hudAllocs'),
   ron: document.getElementById('lbRon'),
-  rival1: document.getElementById('lbRival1'),
-  rival2: document.getElementById('lbRival2'),
+  // Per-rival progress cells, populated by rebuildLeaderboard() each
+  // time spawnRivals() runs. Index matches the rivals[] array.
+  rivals: [],
   toast: document.getElementById('toast')
 };
 
 function updateHUD() {
   hud.score.textContent = player.score.toLocaleString();
-  const ronPct = Math.min(100, Math.floor(player.z / (segments.length * SEG_LEN) * 100));
+  const trackLen = segments.length * SEG_LEN;
+  const ronPct = Math.min(100, Math.floor(player.z / trackLen * 100));
   hud.speed.textContent = Math.floor(player.speed / 60);
   hud.nitro.textContent = player.boost;
   hud.sponsors.textContent = player.sponsors;
   hud.fms.textContent = player.fms;
   hud.allocs.textContent = player.allocs;
   hud.ron.textContent = ronPct + '%';
-  hud.rival1.textContent = Math.min(100, Math.floor(rivals[0].z / (segments.length * SEG_LEN) * 100)) + '%';
-  hud.rival2.textContent = Math.min(100, Math.floor(rivals[1].z / (segments.length * SEG_LEN) * 100)) + '%';
+  for (let i = 0; i < rivals.length; i++) {
+    const cell = hud.rivals[i];
+    if (!cell) continue;
+    cell.textContent = Math.min(100, Math.floor(rivals[i].z / trackLen * 100)) + '%';
+  }
 }
 
 // =====================================================================
@@ -1969,7 +2192,7 @@ function update(dt) {
   const playerSeg = findSegment(player.z + PLAYER_Z);
   for (const s of playerSeg.sprites) {
     if (s.kind === 'palm' || s.kind === 'billboard') continue;
-    if (s.collected || s.hit) continue;
+    if (spriteBlocked(s)) continue;
     const playerHalfW = 0.15;
     const spriteHalfW = 0.13;
     if (Math.abs(player.x - s.offset) < (playerHalfW + spriteHalfW)) {
@@ -1978,7 +2201,8 @@ function update(dt) {
   }
 
   // Rival movement & collection
-  for (const r of rivals) {
+  for (let ri = 0; ri < rivals.length; ri++) {
+    const r = rivals[ri];
     // adjust x slightly to dodge each other and seek pickups
     if (r.nitroTimer > 0) r.nitroTimer = Math.max(0, r.nitroTimer - dt);
     const nitroMul = r.nitroTimer > 0 ? 1.45 : 1.0;
@@ -2003,7 +2227,7 @@ function update(dt) {
       for (let k = 1; k <= dodgeWindow; k++) {
         const seg = segments[(rSegIdx + k) % segments.length];
         for (const h of seg.sprites) {
-          if (h.collected || h.hit) continue;
+          if (spriteBlocked(h)) continue;
           if (h.kind !== 'outage' && h.kind !== 'snow') continue;
           const dx = Math.abs(h.offset - r.x);
           if (dx >= 0.32) continue;                 // outside the collision lane
@@ -2023,13 +2247,18 @@ function update(dt) {
         r.x += steer;
       } else {
         // ---- Pass 2: seek best pickup whose approach is hazard-free ----
-        const seekAhead = 7;
+        // Per-difficulty knobs control how good rivals are at noticing,
+        // committing to, and snapping onto sponsors / FMs / allocators.
+        // Nitro stays high-priority because rivals using nitro is what
+        // keeps the race competitive late.
+        const D = diff();
+        const seekAhead = 6;
         let bestTarget = null;
         let bestScore = -Infinity;
         for (let k = 1; k <= seekAhead; k++) {
           const seg = segments[(rSegIdx + k) % segments.length];
           for (const s of seg.sprites) {
-            if (s.collected || s.hit) continue;
+            if (spriteBlocked(s)) continue;
             let value = 0;
             if      (s.kind === 'nitro')     value = 900;
             else if (s.kind === 'sponsor')   value = 700;
@@ -2037,7 +2266,16 @@ function update(dt) {
             else if (s.kind === 'fm')        value = 300;
             else continue;                            // hazards / phishing skipped here
             const dx = Math.abs(s.offset - r.x);
-            if (dx > 0.85) continue;
+            // Tighter lateral awareness for non-nitro pickups, plus a
+            // random "didn't notice it this frame" skip so rivals can't
+            // perfectly farm every sponsor/FM/allocator. Both knobs are
+            // driven by the current difficulty setting.
+            if (s.kind === 'nitro') {
+              if (dx > 0.85) continue;
+            } else {
+              if (dx > D.awareness) continue;
+              if (Math.random() < D.missChance) continue;
+            }
             // Path-safety check: skip any pickup whose lateral approach
             // crosses a hazard in any closer segment.
             let pathSafe = true;
@@ -2046,25 +2284,31 @@ function update(dt) {
             for (let j = 1; j <= k && pathSafe; j++) {
               const cs = segments[(rSegIdx + j) % segments.length];
               for (const h of cs.sprites) {
-                if (h.collected || h.hit) continue;
+                if (spriteBlocked(h)) continue;
                 if (h.kind !== 'outage' && h.kind !== 'snow') continue;
                 if (h.offset >= minX && h.offset <= maxX) { pathSafe = false; break; }
               }
             }
             if (!pathSafe) continue;
             const distFactor = 1 / (k + 0.4);
-            const reachCost  = dx * 1.3 + 0.15;
+            // Higher reach cost for non-nitro pickups so distant /
+            // awkward sponsors / FMs / allocators get deprioritised.
+            const reachMul   = (s.kind === 'nitro') ? 1.3 : 2.1;
+            const reachCost  = dx * reachMul + 0.15;
             const score = (value / reachCost) * distFactor;
             if (score > bestScore) { bestScore = score; bestTarget = s; }
           }
         }
         if (bestTarget && bestScore > 0) {
-          const diff = bestTarget.offset - r.x;
-          const steer = Math.sign(diff) * Math.min(Math.abs(diff), 1.4 * dt);
+          // Steering speed when chasing pickups is difficulty-scaled —
+          // higher difficulty rivals snap onto off-lane pickups faster.
+          const dxTarget = bestTarget.offset - r.x;
+          const steer = Math.sign(dxTarget) * Math.min(Math.abs(dxTarget), D.steerSpeed * dt);
           r.x += steer;
         } else {
-          // No safe pickup target — gentle weave so they aren't pinned
-          r.x += Math.sin(r.z * 0.0003 + (r.name === 'APEXION' ? 0 : 1.5)) * dt * 0.4;
+          // No safe pickup target — gentle weave so they aren't pinned.
+          // Phase-shift per rival index so they don't oscillate in unison.
+          r.x += Math.sin(r.z * 0.0003 + ri * 1.5) * dt * 0.4;
         }
       }
     }
@@ -2076,7 +2320,7 @@ function update(dt) {
     // Phishing is purely a player score event, so rivals ignore it entirely.
     const rSeg = findSegment(r.z + PLAYER_Z * 0.5);
     for (const s of rSeg.sprites) {
-      if (s.collected || s.hit) continue;
+      if (spriteBlocked(s)) continue;
       if (Math.abs(r.x - s.offset) >= 0.28) continue;
 
       if (s.kind === 'sponsor' || s.kind === 'fm' || s.kind === 'allocator') {
@@ -2086,23 +2330,26 @@ function update(dt) {
       }
 
       // Nitro: rivals trigger it instantly (no stockpile) — gives a brief
-      // forward speed-up the same way the player's nitro does.
+      // forward speed-up the same way the player's nitro does. The pickup
+      // disappears for ~500ms then respawns so another racer can also use it.
       if (s.kind === 'nitro') {
         s.collected = true;
+        s.respawnAt = performance.now() + 500;
         r.nitroTimer = Math.max(r.nitroTimer, 1.4);
         continue;
       }
 
       // Hazards: only react if the rival isn't already in a hazard cooldown.
+      // We do NOT remove the hazard from the track — every racer should be
+      // able to crash into it. r.hazardCool prevents the same rival from
+      // re-triggering the hazard on consecutive frames.
       if (r.hazardCool > 0) continue;
       if (s.kind === 'outage') {
-        s.hit = true;
         r.hazardCool = 1.4;
         r.speed *= 0.4;
         r.spinoutTimer = 1.4; r.spinoutMax = 1.4;
         r.spinoutTotal = Math.PI * 4 * (Math.random() < 0.5 ? 1 : -1);
       } else if (s.kind === 'snow') {
-        s.hit = true;
         r.hazardCool = 0.9;
         r.speed *= 0.85;
         r.spinoutTimer = 0.9; r.spinoutMax = 0.9;
@@ -2159,9 +2406,9 @@ function update(dt) {
 
   // No outpacing — the race only ends when the PLAYER crosses the finish.
   // Rivals can finish ahead but the game won't trigger end until the player
-  // does. Stamp the moment each rival crosses the line so the end-screen can
-  // use real finish times for the penalty math, and cap their z so the
-  // progress bar doesn't drift past 100%.
+  // does. Stamp the moment each rival crosses the line so the end-screen
+  // can use real finish times when awarding placement bonuses, and cap
+  // their z so the progress bar doesn't drift past 100%.
   for (const r of rivals) {
     const finishZ = (segments.length - 6) * SEG_LEN;
     if (r.z >= finishZ && !r.finishTime) {
@@ -2205,6 +2452,26 @@ function update(dt) {
   updateHUD();
 }
 
+// Centralised "should this sprite be skipped right now?" check. Hazards
+// (outage / snow / phishing) intentionally never set s.hit anymore — they
+// remain on the track so every racer can collide with them independently
+// (each racer has their own hitTimer / hazardCool to prevent insta-rehit).
+// Pickups (sponsor / fm / allocator) stay collected permanently. Nitro
+// pickups set a respawnAt timestamp so they wink out for ~500ms after a
+// racer grabs them and then come back for the next racer.
+function spriteBlocked(s) {
+  if (s.hit) return true;
+  if (s.collected) {
+    if (s.respawnAt && performance.now() >= s.respawnAt) {
+      s.collected = false;
+      s.respawnAt = 0;
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 function handlePickup(s) {
   switch (s.kind) {
     case 'sponsor':
@@ -2230,7 +2497,11 @@ function handlePickup(s) {
       addFloater('allocator', 300, '#4FB871');
       break;
     case 'nitro':
+      // AI Boost pickups respawn after ~500ms so multiple racers can
+      // share the same orb. Set collected + respawnAt; spriteBlocked()
+      // will auto-reset it once the timer elapses.
       s.collected = true;
+      s.respawnAt = performance.now() + 500;
       if (player.boost < 3) {
         player.boost++;
         addFloater('nitro', 0, '#3ddcff', '+AI BOOST');
@@ -2238,9 +2509,11 @@ function handlePickup(s) {
         addFloater('nitro', 0, '#c83dff', 'AI BOOST FULL');
       }
       break;
+    // Hazards (phishing / outage / snow) intentionally do NOT mark the
+    // sprite as hit — they persist on the track so rivals can also crash
+    // into them. player.hitTimer prevents a re-trigger on the next frame.
     case 'phishing':
       if (player.hitTimer > 0) return;
-      s.hit = true;
       player.score = player.score - 1000;
       player.hitTimer = 0.8;
       spawnPhishFish();
@@ -2248,7 +2521,6 @@ function handlePickup(s) {
       break;
     case 'outage':
       if (player.hitTimer > 0) return;
-      s.hit = true;
       player.speed *= 0.4;
       player.hitTimer = 1.6;       // sustained slowdown window
       shake = 0.5;
@@ -2260,7 +2532,6 @@ function handlePickup(s) {
       break;
     case 'snow':
       if (player.hitTimer > 0) return;
-      s.hit = true;
       weatherIntensity = Math.min(1, weatherIntensity + 0.6);
       weatherTimer = Math.max(weatherTimer, 5);
       player.speed *= 0.85;
@@ -3408,7 +3679,7 @@ function render() {
     const seg = segments[(baseSegment.index + n) % segments.length];
     if (seg.p1.camera.z <= 0.1) continue;
     for (const sp of seg.sprites) {
-      if (sp.collected || sp.hit) continue;
+      if (spriteBlocked(sp)) continue;
       renderSprite(sp, seg.p1, seg.p1.screen.w);
     }
     // Rivals on this segment range — reuse segment's projected basis so curves work
