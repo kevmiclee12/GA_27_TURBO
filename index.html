@@ -187,6 +187,26 @@
     justify-content: flex-start;
     padding-top: 150px;
   }
+  /* Sand-grain stipple overlay — sits below the palms (z-index 2) and
+     above the base gradient. Two faint dot layers with wide spacing
+     produce a subtle, scattered grain rather than dense speckle. */
+  .overlay.miami-end::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    top: 70%; bottom: 0;
+    pointer-events: none;
+    z-index: 1;
+    background-image:
+      radial-gradient(circle at center, rgba(120, 78, 30, 0.35) 0.6px, transparent 1.0px),
+      radial-gradient(circle at center, rgba(245, 220, 175, 0.35) 0.5px, transparent 0.9px);
+    background-size: 22px 22px, 17px 17px;
+    background-position: 0 0, 9px 6px;
+    /* Fade the top edge of the texture into the sand line so there's no
+       hard horizontal seam where the speckle starts. */
+    mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 100%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 100%);
+  }
   .miami-end .palm {
     position: absolute; bottom: -10px; height: 360px; width: 220px;
     z-index: 2; pointer-events: none;
@@ -335,6 +355,9 @@
     margin-bottom: 14px;
   }
   .miami-end #endStats { position: relative; z-index: 3; width: 90%; max-width: 640px; }
+  /* Pull RACE AGAIN closer to the leaderboard so it sits higher on the
+     end screen instead of hugging the bottom palms. */
+  .miami-end button#restartBtn { position: relative; z-index: 3; margin-top: -4px; }
   .miami-end button { position: relative; z-index: 3; }
 
   .leaderboard-table {
@@ -543,41 +566,107 @@
         <path d="M 1 7 Q 6 1 11 7 Q 13 4 15 7 Q 20 1 25 7" stroke="#3a1a40" stroke-width="1.5" fill="none" stroke-linecap="round"/>
       </svg>
     </div>
-    <!-- Palm trees flanking the beach -->
+    <!-- Palm trees flanking the beach. The crown uses three layered tiers
+         of fronds (back = darkest, mid = medium, front = brightest) plus
+         a thin highlight layer on top to suggest the feathery leaflet
+         texture of a coconut palm. Trunk is banded for ring texture. -->
     <svg class="palm palm-left" viewBox="0 0 200 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet">
+      <!-- Trunk: dark base stroke -->
       <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
             stroke="#3a2a14" stroke-width="14" fill="none" stroke-linecap="round"/>
-      <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
-            stroke="#7a5a30" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="3 14" opacity="0.75"/>
-      <circle cx="83" cy="36" r="6" fill="#2a1a0a"/>
-      <circle cx="95" cy="29" r="6" fill="#2a1a0a"/>
-      <circle cx="78" cy="48" r="5" fill="#2a1a0a"/>
+      <!-- Trunk: warm highlight stripe down the right side -->
+      <path d="M 100 360 Q 90 270 98 175 Q 107 80 92 22"
+            stroke="#6e4e26" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.55"/>
+      <!-- Trunk: horizontal banding rings for coconut-palm texture -->
+      <g stroke="#1f1408" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.85">
+        <path d="M 96 332 Q 100 334 104 332"/>
+        <path d="M 95 306 Q 99 308 103 306"/>
+        <path d="M 96 280 Q 100 282 104 280"/>
+        <path d="M 97 252 Q 101 254 105 252"/>
+        <path d="M 99 222 Q 103 224 107 222"/>
+        <path d="M 100 190 Q 104 192 108 190"/>
+        <path d="M 101 156 Q 105 158 109 156"/>
+        <path d="M 100 122 Q 104 124 108 122"/>
+        <path d="M 98 88 Q 102 90 106 88"/>
+        <path d="M 95 56 Q 99 58 103 56"/>
+      </g>
+      <!-- Crown of fronds, anchored at the trunk top (90, 22) -->
       <g transform="translate(90 22)">
-        <path d="M 0 0 Q 60 -10 105 -25 Q 80 -2 50 -2 Q 20 4 0 0 Z" fill="#0d6e3a"/>
-        <path d="M 0 0 Q -60 -10 -105 -25 Q -80 -2 -50 -2 Q -20 4 0 0 Z" fill="#0d6e3a"/>
-        <path d="M 0 0 Q 65 14 110 32 Q 85 24 50 14 Q 20 6 0 0 Z" fill="#0a5a30"/>
-        <path d="M 0 0 Q -65 14 -110 32 Q -85 24 -50 14 Q -20 6 0 0 Z" fill="#0a5a30"/>
-        <path d="M 0 0 Q 28 -55 38 -90 Q 28 -55 14 -25 Q 5 -8 0 0 Z" fill="#15843d"/>
-        <path d="M 0 0 Q -28 -55 -38 -90 Q -28 -55 -14 -25 Q -5 -8 0 0 Z" fill="#15843d"/>
-        <path d="M 0 0 Q 5 -45 0 -100 Q -3 -75 -5 -45 Q -2 -15 0 0 Z" fill="#11743c"/>
+        <!-- BACK tier: long deep-shadow fronds drooping out to the sides -->
+        <path d="M 0 2 C -30 6 -65 22 -105 56 C -82 24 -50 10 -22 4 Z" fill="#0a4f24"/>
+        <path d="M 0 2 C 30 6 65 22 105 56 C 82 24 50 10 22 4 Z" fill="#0a4f24"/>
+        <path d="M 0 0 C -28 -28 -58 -58 -82 -84 C -64 -56 -38 -28 -14 -4 Z" fill="#0a4f24"/>
+        <path d="M 0 0 C 28 -28 58 -58 82 -84 C 64 -56 38 -28 14 -4 Z" fill="#0a4f24"/>
+
+        <!-- MID tier: medium-green fronds at horizontal and gentle-droop angles -->
+        <path d="M 0 1 C -32 -1 -75 -4 -118 -10 C -82 10 -42 12 -16 5 Z" fill="#0d6e3a"/>
+        <path d="M 0 1 C 32 -1 75 -4 118 -10 C 82 10 42 12 16 5 Z" fill="#0d6e3a"/>
+        <path d="M 0 1 C -22 12 -55 36 -82 70 C -60 36 -32 14 -12 6 Z" fill="#0d6e3a"/>
+        <path d="M 0 1 C 22 12 55 36 82 70 C 60 36 32 14 12 6 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 C -22 -18 -50 -42 -70 -68 C -54 -42 -30 -22 -10 -4 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 C 22 -18 50 -42 70 -68 C 54 -42 30 -22 10 -4 Z" fill="#0d6e3a"/>
+
+        <!-- FRONT tier: bright fronds pointing up and tip-drooping -->
+        <path d="M 0 0 C -12 -28 -26 -58 -40 -94 C -26 -58 -14 -30 -4 -6 Z" fill="#16933f"/>
+        <path d="M 0 0 C 12 -28 26 -58 40 -94 C 26 -58 14 -30 4 -6 Z" fill="#16933f"/>
+        <path d="M 0 0 C -2 -32 -1 -68 0 -104 C 2 -68 1 -32 3 -6 Z" fill="#16933f"/>
+        <path d="M 0 1 C -18 4 -42 18 -64 42 C -48 24 -26 12 -10 4 Z" fill="#16933f"/>
+        <path d="M 0 1 C 18 4 42 18 64 42 C 48 24 26 12 10 4 Z" fill="#16933f"/>
+
+        <!-- Leaflet highlights — thin slivers along the spines of the top fronds -->
+        <g fill="#2dc56a" opacity="0.75">
+          <path d="M 0 0 C -7 -22 -16 -50 -28 -82 C -20 -54 -10 -26 -1 -4 Z"/>
+          <path d="M 0 0 C 7 -22 16 -50 28 -82 C 20 -54 10 -26 1 -4 Z"/>
+          <path d="M 0 0 C -1 -28 0 -60 0 -90 C 1 -60 1 -30 2 -4 Z"/>
+          <path d="M 0 1 C -14 4 -34 16 -52 36 C -38 22 -20 10 -8 3 Z"/>
+          <path d="M 0 1 C 14 4 34 16 52 36 C 38 22 20 10 8 3 Z"/>
+        </g>
+
+        <!-- Central dark node where all fronds meet -->
+        <circle cx="0" cy="0" r="5" fill="#093619"/>
       </g>
     </svg>
     <svg class="palm palm-right" viewBox="0 0 200 360" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet">
       <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
             stroke="#3a2a14" stroke-width="14" fill="none" stroke-linecap="round"/>
-      <path d="M 100 360 Q 88 270 96 175 Q 105 80 90 22"
-            stroke="#7a5a30" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="3 14" opacity="0.75"/>
-      <circle cx="83" cy="36" r="6" fill="#2a1a0a"/>
-      <circle cx="95" cy="29" r="6" fill="#2a1a0a"/>
-      <circle cx="78" cy="48" r="5" fill="#2a1a0a"/>
+      <path d="M 100 360 Q 90 270 98 175 Q 107 80 92 22"
+            stroke="#6e4e26" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.55"/>
+      <g stroke="#1f1408" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.85">
+        <path d="M 96 332 Q 100 334 104 332"/>
+        <path d="M 95 306 Q 99 308 103 306"/>
+        <path d="M 96 280 Q 100 282 104 280"/>
+        <path d="M 97 252 Q 101 254 105 252"/>
+        <path d="M 99 222 Q 103 224 107 222"/>
+        <path d="M 100 190 Q 104 192 108 190"/>
+        <path d="M 101 156 Q 105 158 109 156"/>
+        <path d="M 100 122 Q 104 124 108 122"/>
+        <path d="M 98 88 Q 102 90 106 88"/>
+        <path d="M 95 56 Q 99 58 103 56"/>
+      </g>
       <g transform="translate(90 22)">
-        <path d="M 0 0 Q 60 -10 105 -25 Q 80 -2 50 -2 Q 20 4 0 0 Z" fill="#0d6e3a"/>
-        <path d="M 0 0 Q -60 -10 -105 -25 Q -80 -2 -50 -2 Q -20 4 0 0 Z" fill="#0d6e3a"/>
-        <path d="M 0 0 Q 65 14 110 32 Q 85 24 50 14 Q 20 6 0 0 Z" fill="#0a5a30"/>
-        <path d="M 0 0 Q -65 14 -110 32 Q -85 24 -50 14 Q -20 6 0 0 Z" fill="#0a5a30"/>
-        <path d="M 0 0 Q 28 -55 38 -90 Q 28 -55 14 -25 Q 5 -8 0 0 Z" fill="#15843d"/>
-        <path d="M 0 0 Q -28 -55 -38 -90 Q -28 -55 -14 -25 Q -5 -8 0 0 Z" fill="#15843d"/>
-        <path d="M 0 0 Q 5 -45 0 -100 Q -3 -75 -5 -45 Q -2 -15 0 0 Z" fill="#11743c"/>
+        <path d="M 0 2 C -30 6 -65 22 -105 56 C -82 24 -50 10 -22 4 Z" fill="#0a4f24"/>
+        <path d="M 0 2 C 30 6 65 22 105 56 C 82 24 50 10 22 4 Z" fill="#0a4f24"/>
+        <path d="M 0 0 C -28 -28 -58 -58 -82 -84 C -64 -56 -38 -28 -14 -4 Z" fill="#0a4f24"/>
+        <path d="M 0 0 C 28 -28 58 -58 82 -84 C 64 -56 38 -28 14 -4 Z" fill="#0a4f24"/>
+        <path d="M 0 1 C -32 -1 -75 -4 -118 -10 C -82 10 -42 12 -16 5 Z" fill="#0d6e3a"/>
+        <path d="M 0 1 C 32 -1 75 -4 118 -10 C 82 10 42 12 16 5 Z" fill="#0d6e3a"/>
+        <path d="M 0 1 C -22 12 -55 36 -82 70 C -60 36 -32 14 -12 6 Z" fill="#0d6e3a"/>
+        <path d="M 0 1 C 22 12 55 36 82 70 C 60 36 32 14 12 6 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 C -22 -18 -50 -42 -70 -68 C -54 -42 -30 -22 -10 -4 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 C 22 -18 50 -42 70 -68 C 54 -42 30 -22 10 -4 Z" fill="#0d6e3a"/>
+        <path d="M 0 0 C -12 -28 -26 -58 -40 -94 C -26 -58 -14 -30 -4 -6 Z" fill="#16933f"/>
+        <path d="M 0 0 C 12 -28 26 -58 40 -94 C 26 -58 14 -30 4 -6 Z" fill="#16933f"/>
+        <path d="M 0 0 C -2 -32 -1 -68 0 -104 C 2 -68 1 -32 3 -6 Z" fill="#16933f"/>
+        <path d="M 0 1 C -18 4 -42 18 -64 42 C -48 24 -26 12 -10 4 Z" fill="#16933f"/>
+        <path d="M 0 1 C 18 4 42 18 64 42 C 48 24 26 12 10 4 Z" fill="#16933f"/>
+        <g fill="#2dc56a" opacity="0.75">
+          <path d="M 0 0 C -7 -22 -16 -50 -28 -82 C -20 -54 -10 -26 -1 -4 Z"/>
+          <path d="M 0 0 C 7 -22 16 -50 28 -82 C 20 -54 10 -26 1 -4 Z"/>
+          <path d="M 0 0 C -1 -28 0 -60 0 -90 C 1 -60 1 -30 2 -4 Z"/>
+          <path d="M 0 1 C -14 4 -34 16 -52 36 C -38 22 -20 10 -8 3 Z"/>
+          <path d="M 0 1 C 14 4 34 16 52 36 C 38 22 20 10 8 3 Z"/>
+        </g>
+        <circle cx="0" cy="0" r="5" fill="#093619"/>
       </g>
     </svg>
     <!-- iConnections logo -->
@@ -648,10 +737,10 @@ const PLAYER_Z = (CAM_HEIGHT * CAM_DEPTH);
 //                  frequency; track sprite distribution is otherwise
 //                  identical across levels
 const DIFFICULTY = {
-  easy:      { label: 'EASY',      speedMul: 0.85, missChance: 0.50, awareness: 0.40, steerSpeed: 0.85, hazardBoost: 1.0 },
-  normal:    { label: 'NORMAL',    speedMul: 0.9, missChance: 0.25, awareness: 0.55, steerSpeed: 1.15, hazardBoost: 1.0 },
-  hard:      { label: 'HARD',      speedMul: 1.00, missChance: 0.10, awareness: 0.75, steerSpeed: 1.45, hazardBoost: 1.0 },
-  nightmare: { label: 'NIGHTMARE', speedMul: 1.04, missChance: 0.00, awareness: 0.90, steerSpeed: 1.75, hazardBoost: 1.6 },
+  easy:      { label: 'EASY',      speedMul: 0.85, missChance: 0.50, awareness: 0.40, steerSpeed: 0.85, hazardBoost: 1.0, seekAhead: 5, reachMul:  1.0},
+  normal:    { label: 'NORMAL',    speedMul: 0.9, missChance: 0.25, awareness: 0.65, steerSpeed: 1.15, hazardBoost: 1.0, seekAhead: 6, reachMul: 1.6 },
+  hard:      { label: 'HARD',      speedMul: 1.00, missChance: 0.00, awareness: 0.85, steerSpeed: 1.45, hazardBoost: 1.0, seekAhead: 7, reachMul: 2.4 },
+  nightmare: { label: 'NIGHTMARE', speedMul: 1.04, missChance: 0.00, awareness: 0.85, steerSpeed: 1.75, hazardBoost: 1.6, seekAhead: 8, reachMul: 2.8 },
 };
 let currentDifficulty = 'normal';
 function diff() { return DIFFICULTY[currentDifficulty]; }
@@ -684,6 +773,14 @@ let palms = [];
 let fadeIn = 1;
 let buildings = []; // { x, h, w, windows:[[r,c]] }
 let floaters = []; // pickup feedback: rising icon + "+N" points
+// Flashy boost-trigger animation. age advances each frame; when age >=
+// duration the burst is inactive. particles + streaks are spawned once
+// on activation and animated along with the main text.
+let boostBurst = { active: false, age: 0, duration: 1.15, particles: [], streaks: [] };
+// Hazard-hit animation (PHISHED! / PLATFORM OUTAGE! / SNOW STORM!).
+// Same shape as boostBurst, plus a palette object so each hazard renders
+// in its own colors and a flavor flag for hazard-specific particle motion.
+let hazardBurst = { active: false, age: 0, duration: 1.6, label: '', palette: null, flavor: 'crash', particles: [], streaks: [] };
 
 // =====================================================================
 // UTIL
@@ -882,19 +979,19 @@ function spawnRivals() {
     { name: 'APEXION',  color: '#ff5577', accent: '#ffaa66', x: -0.25, z: 0,
       // Rivals launch off the line at 80% of MAX_SPEED, then the
       // recovery code in update() pulls them up to baseSpeed.
-      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.946 * sm,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.95 * sm,
       score: 0, hitCool: 0, hazardCool: 0,
       spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
       nitroTimer: 0,
       finishTime: null },
     { name: 'KONNEXXT', color: '#66ffaa', accent: '#aaffd2', x:  0.25, z: 0,
-      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.938 * sm,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.942 * sm,
       score: 0, hitCool: 0, hazardCool: 0,
       spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
       nitroTimer: 0,
       finishTime: null },
     { name: 'UNCORREL8ED', color: '#F5F7FA', accent: '#5E6875', x:  0.5, z: 0,
-      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.954 * sm,
+      speed: MAX_SPEED * 0.8, baseSpeed: MAX_SPEED * 0.958 * sm,
       score: 0, hitCool: 0, hazardCool: 0,
       spinoutTimer: 0, spinoutMax: 0, spinoutTotal: 0, spinoutAngle: 0,
       nitroTimer: 0,
@@ -937,7 +1034,6 @@ function resetPlayer() {
     x: 0,           // -1..1
     z: 0,           // along track in world units
     speed: 0,
-    lives: 3,
     score: 0,
     sponsors: 0,
     fms: 0,
@@ -1725,6 +1821,14 @@ function startGame() {
   shake = 0;
   fadeIn = 1;
   floaters = [];
+  boostBurst.active = false;
+  boostBurst.age = 0;
+  boostBurst.particles = [];
+  boostBurst.streaks = [];
+  hazardBurst.active = false;
+  hazardBurst.age = 0;
+  hazardBurst.particles = [];
+  hazardBurst.streaks = [];
   countdownTimer = 3.6; // 3 ... 2 ... 1 ... GO!
   lastCountdownLabel = null;
   phishFish = [];
@@ -1969,8 +2073,480 @@ function tryBoost() {
   if (player.boost > 0 && player.boostTimer <= 0) {
     player.boost -= 1;
     player.boostTimer = 1.4;
-    showToast('AI BOOST!', '#3ddcff');
+    triggerBoostBurst();
   }
+}
+
+// Spawn a flashy "AI BOOST!" burst when the player triggers a boost.
+// Replaces the old single-line toast with a multi-element animation:
+// pop-in headline with chromatic-aberration outline, color cycling,
+// radial sparkle particles, and horizontal speed-line streaks.
+function triggerBoostBurst() {
+  boostBurst.active = true;
+  boostBurst.age = 0;
+  boostBurst.particles = [];
+  boostBurst.streaks = [];
+  // Radial sparkle particles bursting from a point above the bike
+  const particleCount = 28;
+  for (let i = 0; i < particleCount; i++) {
+    const ang = (i / particleCount) * Math.PI * 2 + Math.random() * 0.2;
+    const spd = 220 + Math.random() * 260;
+    boostBurst.particles.push({
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd * 0.85,
+      life: 0.55 + Math.random() * 0.3,
+      age: 0,
+      size: 2 + Math.random() * 3,
+      hue: Math.random() < 0.5 ? '#3ddcff' : (Math.random() < 0.5 ? '#ff2bd6' : '#ffffff')
+    });
+  }
+  // Horizontal speed-line streaks flying outward
+  for (let i = 0; i < 14; i++) {
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    boostBurst.streaks.push({
+      yOffset: (Math.random() - 0.5) * 90,
+      dir,
+      speed: 800 + Math.random() * 700,
+      length: 60 + Math.random() * 80,
+      life: 0.35 + Math.random() * 0.2,
+      age: 0,
+      thickness: 1 + Math.random() * 2.5
+    });
+  }
+}
+
+// =====================================================================
+// HAZARD BURST — dramatized text for PHISHED / OUTAGE / SNOW STORM
+// =====================================================================
+// One engine; per-hazard palette controls colors + a "flavor" knob
+// switches the particle motion (radial scatter vs. snowflake drift, etc.).
+const HAZARD_PALETTES = {
+  phishing: {
+    label:        'PHISHED!  −1000',
+    main:         '#ffd23f',
+    accent:       '#ff6e1a',
+    accent2:      '#ffffff',
+    glow:         '#ffaa33',
+    bandTop:      'rgba(20, 14, 0, 0)',
+    bandMid:      'rgba(255, 138, 40, 0.32)',
+    streak:       'rgba(255, 220, 120, ',
+    particles:    ['#ffd23f', '#ff8c1a', '#ffffff', '#aaaaaa'],
+    flavor:       'glitch',
+    duration:     1.55,
+  },
+  outage: {
+    label:        'PLATFORM  OUTAGE!',
+    main:         '#ff5566',
+    accent:       '#ffd23f',
+    accent2:      '#ffffff',
+    glow:         '#ff2233',
+    bandTop:      'rgba(40, 0, 4, 0)',
+    bandMid:      'rgba(255, 50, 50, 0.38)',
+    streak:       'rgba(255, 120, 130, ',
+    particles:    ['#ff5566', '#ffd23f', '#ffffff', '#220000'],
+    flavor:       'crash',
+    duration:     1.7,
+  },
+  snow: {
+    label:        'SNOW  STORM!',
+    main:         '#e8f1ff',
+    accent:       '#67d2ff',
+    accent2:      '#bbcfff',
+    glow:         '#a5c8ff',
+    bandTop:      'rgba(20, 30, 60, 0)',
+    bandMid:      'rgba(180, 220, 255, 0.32)',
+    streak:       'rgba(220, 240, 255, ',
+    particles:    ['#ffffff', '#bbcfff', '#67d2ff', '#e0eaff'],
+    flavor:       'blizzard',
+    duration:     1.5,
+  },
+};
+
+function triggerHazardBurst(kind) {
+  const palette = HAZARD_PALETTES[kind];
+  if (!palette) return;
+  hazardBurst.active = true;
+  hazardBurst.age = 0;
+  hazardBurst.duration = palette.duration;
+  hazardBurst.label = palette.label;
+  hazardBurst.palette = palette;
+  hazardBurst.flavor = palette.flavor;
+  hazardBurst.particles = [];
+  hazardBurst.streaks = [];
+
+  // Particle motion varies per flavor.
+  //   crash:    radial scatter outward + gravity (debris feel)
+  //   glitch:   radial scatter (PHISHED has its glitch in the text)
+  //   blizzard: drift downward like snowflakes with horizontal wobble
+  const particleCount = palette.flavor === 'blizzard' ? 40 : 32;
+  for (let i = 0; i < particleCount; i++) {
+    if (palette.flavor === 'blizzard') {
+      hazardBurst.particles.push({
+        x: (Math.random() - 0.5) * W * 0.9,
+        y: -40 - Math.random() * 80,
+        vx: (Math.random() - 0.5) * 80,
+        vy: 120 + Math.random() * 180,
+        wobble: Math.random() * Math.PI * 2,
+        life: 1.2 + Math.random() * 0.4,
+        age: 0,
+        size: 2 + Math.random() * 3,
+        hue: palette.particles[Math.floor(Math.random() * palette.particles.length)],
+      });
+    } else {
+      const ang = (i / particleCount) * Math.PI * 2 + Math.random() * 0.3;
+      const spd = 220 + Math.random() * 280;
+      hazardBurst.particles.push({
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd * 0.85,
+        life: 0.55 + Math.random() * 0.35,
+        age: 0,
+        size: 2 + Math.random() * 3,
+        hue: palette.particles[Math.floor(Math.random() * palette.particles.length)],
+      });
+    }
+  }
+  // Speed-line streaks (skip for blizzard — snow uses falling drift instead)
+  if (palette.flavor !== 'blizzard') {
+    for (let i = 0; i < 16; i++) {
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      hazardBurst.streaks.push({
+        yOffset: (Math.random() - 0.5) * 100,
+        dir,
+        speed: 800 + Math.random() * 700,
+        length: 60 + Math.random() * 90,
+        life: 0.35 + Math.random() * 0.2,
+        age: 0,
+        thickness: 1 + Math.random() * 2.5,
+      });
+    }
+  }
+}
+
+function updateHazardBurst(dt) {
+  if (!hazardBurst.active) return;
+  hazardBurst.age += dt;
+  for (const p of hazardBurst.particles) p.age += dt;
+  for (const s of hazardBurst.streaks) s.age += dt;
+  if (hazardBurst.age >= hazardBurst.duration) {
+    hazardBurst.active = false;
+    hazardBurst.particles = [];
+    hazardBurst.streaks = [];
+  }
+}
+
+function renderHazardBurst() {
+  if (!hazardBurst.active) return;
+  const P = hazardBurst.palette;
+  const t = hazardBurst.age / hazardBurst.duration;
+  const cx = W / 2;
+  const cy = H * 0.42;
+
+  ctx.save();
+
+  // ---- Background flash band ----
+  const bandPhase = clamp(hazardBurst.age / 0.22, 0, 1);
+  const bandAlpha = (1 - bandPhase);
+  if (bandAlpha > 0.005) {
+    const grad = ctx.createLinearGradient(0, cy - 75, 0, cy + 75);
+    grad.addColorStop(0,   P.bandTop);
+    grad.addColorStop(0.5, P.bandMid);
+    grad.addColorStop(1,   P.bandTop);
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = bandAlpha;
+    ctx.fillRect(0, cy - 75, W, 150);
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- Speed-line streaks ----
+  for (const s of hazardBurst.streaks) {
+    if (s.age >= s.life) continue;
+    const lt = s.age / s.life;
+    const alpha = 1 - lt;
+    const dist = s.speed * s.age;
+    const sx = cx + s.dir * dist;
+    const sy = cy + s.yOffset;
+    ctx.strokeStyle = P.streak + alpha + ')';
+    ctx.lineWidth = s.thickness;
+    ctx.shadowColor = P.glow;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx - s.dir * s.length, sy);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  // ---- Particles ----
+  for (const p of hazardBurst.particles) {
+    if (p.age >= p.life) continue;
+    const lt = p.age / p.life;
+    const alpha = (1 - lt) * (1 - lt);
+    let px, py;
+    if (hazardBurst.flavor === 'blizzard') {
+      // Snowflake drift: vy * t + horizontal wobble
+      px = cx + p.x + Math.sin(p.wobble + p.age * 4) * 14 + p.vx * p.age * 0.3;
+      py = cy + p.y + p.vy * p.age;
+    } else {
+      const drag = 1 - lt * 0.4;
+      px = cx + p.vx * p.age * drag;
+      py = cy + p.vy * p.age * drag + (p.age * p.age * 60);
+    }
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.hue;
+    ctx.shadowColor = p.hue;
+    ctx.shadowBlur = 12;
+    const sz = p.size * (1 - lt * 0.4);
+    ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+
+  // ---- Main hazard text — slam-in, heavy jitter, color cycling ----
+  // Phases: slam (0 → 0.12 — start large, scale down to settle), settle
+  // (0.12 → 0.22 with overshoot), hold (0.22 → 0.78 with jitter + cycle),
+  // exit (0.78 → 1.0, slide up + fade)
+  let scale, alpha, rise;
+  if (t < 0.12) {
+    const lp = t / 0.12;
+    const eased = 1 - Math.pow(1 - lp, 3);
+    // Slam from 2.0× down to 1.05×
+    scale = 2.0 - 0.95 * eased;
+    alpha = lp;
+    rise = 0;
+  } else if (t < 0.22) {
+    const lp = (t - 0.12) / 0.10;
+    scale = 1.05 - 0.05 * lp;
+    alpha = 1;
+    rise = 0;
+  } else if (t < 0.78) {
+    scale = 1.0 + Math.sin(hazardBurst.age * 20) * 0.04;
+    alpha = 1;
+    rise = 0;
+  } else {
+    const lp = (t - 0.78) / 0.22;
+    scale = 1.0 + lp * 0.25;
+    alpha = 1 - lp;
+    rise = lp * 90;
+  }
+
+  // Heavier jitter than the boost burst — this hurts.
+  const jitterAmount = (t < 0.18)
+    ? 5 + (1 - t / 0.18) * 6     // very heavy on impact
+    : (t < 0.78 ? 2.2 : 1);
+  const jx = (Math.random() - 0.5) * jitterAmount;
+  const jy = (Math.random() - 0.5) * jitterAmount;
+
+  const tx = cx + jx;
+  const ty = cy - rise + jy;
+
+  // Color cycle for the main fill — strobes between main, accent, accent2
+  const cyc = hazardBurst.age * 16;
+  const cycPhase = Math.floor(cyc) % 3;
+  const mainColor = cycPhase === 0 ? P.main : (cycPhase === 1 ? P.accent : P.accent2);
+
+  ctx.save();
+  ctx.translate(tx, ty);
+  ctx.transform(1, 0, -0.16, 1, 0, 0);
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = alpha;
+  ctx.font = `900 50px 'Courier New', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+
+  // PHISHED uses a glitch flavor — occasionally render a thin horizontal
+  // slice of the text offset sideways to simulate scanline corruption.
+  const glitchActive = P.flavor === 'glitch' && t > 0.12 && t < 0.78 && Math.random() < 0.35;
+
+  // Chromatic-aberration outlines
+  ctx.shadowColor = P.accent;
+  ctx.shadowBlur = 22;
+  ctx.fillStyle = P.accent;
+  ctx.globalAlpha = alpha * 0.6;
+  ctx.fillText(hazardBurst.label, -6, 0);
+  ctx.shadowColor = P.main;
+  ctx.shadowBlur = 22;
+  ctx.fillStyle = P.main;
+  ctx.fillText(hazardBurst.label, 6, 0);
+  ctx.globalAlpha = alpha;
+
+  // Dark stroke for crisp edges
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(8, 0, 10, 0.92)';
+  ctx.strokeText(hazardBurst.label, 0, 0);
+
+  // Glitch slice
+  if (glitchActive) {
+    const bandY = (Math.random() - 0.5) * 36;
+    const bandH = 6 + Math.random() * 12;
+    const offX  = (Math.random() - 0.5) * 18;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-300, bandY - bandH / 2, 600, bandH);
+    ctx.clip();
+    ctx.shadowColor = P.accent;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = P.accent;
+    ctx.fillText(hazardBurst.label, offX, 0);
+    ctx.restore();
+  }
+
+  // Main color-cycling fill on top
+  ctx.shadowColor = P.glow;
+  ctx.shadowBlur = 24;
+  ctx.fillStyle = mainColor;
+  ctx.fillText(hazardBurst.label, 0, 0);
+
+  ctx.restore();
+  ctx.restore();
+}
+
+function updateBoostBurst(dt) {
+  if (!boostBurst.active) return;
+  boostBurst.age += dt;
+  for (const p of boostBurst.particles) p.age += dt;
+  for (const s of boostBurst.streaks) s.age += dt;
+  if (boostBurst.age >= boostBurst.duration) {
+    boostBurst.active = false;
+    boostBurst.particles = [];
+    boostBurst.streaks = [];
+  }
+}
+
+function renderBoostBurst() {
+  if (!boostBurst.active) return;
+  const t = boostBurst.age / boostBurst.duration;
+  const cx = W / 2;
+  const cy = H * 0.42;
+
+  ctx.save();
+
+  // ---- Background flash band: brief horizontal glow across the screen ----
+  const bandPhase = clamp(boostBurst.age / 0.18, 0, 1);
+  const bandAlpha = (1 - bandPhase) * 0.35;
+  if (bandAlpha > 0.005) {
+    const grad = ctx.createLinearGradient(0, cy - 60, 0, cy + 60);
+    grad.addColorStop(0,   'rgba(61, 220, 255, 0)');
+    grad.addColorStop(0.5, `rgba(255, 43, 214, ${bandAlpha})`);
+    grad.addColorStop(1,   'rgba(61, 220, 255, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, cy - 60, W, 120);
+  }
+
+  // ---- Horizontal speed-line streaks ----
+  for (const s of boostBurst.streaks) {
+    if (s.age >= s.life) continue;
+    const lt = s.age / s.life;
+    const alpha = 1 - lt;
+    const dist = s.speed * s.age;
+    const sx = cx + s.dir * dist;
+    const sy = cy + s.yOffset;
+    ctx.strokeStyle = `rgba(180, 240, 255, ${alpha})`;
+    ctx.lineWidth = s.thickness;
+    ctx.shadowColor = '#3ddcff';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx - s.dir * s.length, sy);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  // ---- Sparkle particles ----
+  for (const p of boostBurst.particles) {
+    if (p.age >= p.life) continue;
+    const lt = p.age / p.life;
+    const alpha = (1 - lt) * (1 - lt);
+    // Particles slow down as they age (drag)
+    const drag = 1 - lt * 0.4;
+    const px = cx + p.vx * p.age * drag;
+    const py = cy + p.vy * p.age * drag + (p.age * p.age * 40); // slight gravity
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.hue;
+    ctx.shadowColor = p.hue;
+    ctx.shadowBlur = 12;
+    const sz = p.size * (1 - lt * 0.5);
+    ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+
+  // ---- Main "AI BOOST!" text — animated pop, color-cycling, slight wobble ----
+  // Phases: pop (0 → 0.15), settle (0.15 → 0.25), hold (0.25 → 0.78),
+  //         exit (0.78 → 1.0 with rise + fade)
+  let scale, alpha, rise;
+  if (t < 0.15) {
+    const lp = t / 0.15;
+    const eased = 1 - Math.pow(1 - lp, 3);
+    scale = 0.25 + 0.95 * eased;
+    alpha = lp;
+    rise = 0;
+  } else if (t < 0.25) {
+    const lp = (t - 0.15) / 0.10;
+    scale = 1.20 - 0.20 * lp;
+    alpha = 1;
+    rise = 0;
+  } else if (t < 0.78) {
+    // Hold with a tiny breathing wobble
+    scale = 1.0 + Math.sin(boostBurst.age * 18) * 0.04;
+    alpha = 1;
+    rise = 0;
+  } else {
+    const lp = (t - 0.78) / 0.22;
+    scale = 1.0 + lp * 0.25;
+    alpha = 1 - lp;
+    rise = lp * 90;
+  }
+
+  // Jitter — small position shake during the held phase
+  const jitterAmount = (t > 0.18 && t < 0.78) ? 1.4 : 0.6;
+  const jx = (Math.random() - 0.5) * jitterAmount;
+  const jy = (Math.random() - 0.5) * jitterAmount;
+
+  const tx = cx + jx;
+  const ty = cy - rise + jy;
+
+  // Color cycle for the main fill — strobes cyan / magenta / white
+  const cyc = boostBurst.age * 14;
+  const cycPhase = Math.floor(cyc) % 3;
+  const mainColor = cycPhase === 0 ? '#3ddcff' : (cycPhase === 1 ? '#ff2bd6' : '#ffffff');
+
+  ctx.save();
+  ctx.translate(tx, ty);
+  // Italic shear for a forward-leaning speed look
+  ctx.transform(1, 0, -0.20, 1, 0, 0);
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = alpha;
+  ctx.font = `900 56px 'Courier New', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+
+  // Chromatic-aberration outlines — cyan shifted left, magenta shifted right
+  ctx.shadowColor = '#3ddcff';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = 'rgba(61, 220, 255, 0.75)';
+  ctx.fillText('AI BOOST!', -5, 0);
+  ctx.shadowColor = '#ff2bd6';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = 'rgba(255, 43, 214, 0.75)';
+  ctx.fillText('AI BOOST!', 5, 0);
+
+  // Dark stroke for crisp edge definition
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(15, 0, 25, 0.9)';
+  ctx.strokeText('AI BOOST!', 0, 0);
+
+  // Main color-cycling fill on top
+  ctx.shadowColor = mainColor;
+  ctx.shadowBlur = 22;
+  ctx.fillStyle = mainColor;
+  ctx.fillText('AI BOOST!', 0, 0);
+
+  ctx.restore();
+  ctx.restore();
 }
 
 // Award a STARTING-SPEED bonus based on how closely the first UP press
@@ -2029,14 +2605,15 @@ function updateHUD() {
 // =====================================================================
 // PICKUP FLOATERS — small icon + "+N" rises and fades
 // =====================================================================
-function addFloater(kind, points, color, text) {
+function addFloater(kind, points, color, text, boosted) {
   floaters.push({
     kind, points, color,
     text: text || ('+' + points),
     x: W / 2 + player.x * 60 + (Math.random() - 0.5) * 24,
     y: H - 210,
     age: 0,
-    duration: 1.0
+    duration: boosted ? 1.25 : 1.0,
+    boosted: !!boosted,
   });
 }
 
@@ -2060,17 +2637,67 @@ function renderFloaters() {
     const fy = f.y - t * 140;
     const fx = f.x;
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    // Just "+N" text — the picked-up item itself disappears immediately
-    ctx.fillStyle = f.color;
-    ctx.shadowColor = '#000';
-    ctx.shadowBlur = 12;
-    ctx.font = `900 ${Math.round(30 * scale)}px 'Courier New'`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(f.text, fx, fy);
-    ctx.restore();
+    if (f.boosted) {
+      // Boost-multiplied pickup — render with the AI-BOOST text treatment:
+      // italic shear, chromatic-aberration outlines, color-cycling fill,
+      // jitter, and a strong neon glow. Same lifecycle (rise + fade) so
+      // it still reads as a pickup floater.
+      ctx.save();
+      // Tiny jitter for the held phase
+      const jitter = t < 0.65 ? 1.2 : 0.4;
+      const jx = (Math.random() - 0.5) * jitter;
+      const jy = (Math.random() - 0.5) * jitter;
+      ctx.translate(fx + jx, fy + jy);
+      ctx.transform(1, 0, -0.20, 1, 0, 0);          // italic forward shear
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = alpha;
+      ctx.font = `900 40px 'Courier New', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+
+      // Color cycle for the main fill — strobes between the item color,
+      // cyan, and white so it visibly pulses.
+      const cyc = f.age * 14;
+      const cycPhase = Math.floor(cyc) % 3;
+      const mainColor = cycPhase === 0 ? f.color : (cycPhase === 1 ? '#3ddcff' : '#ffffff');
+
+      // Chromatic-aberration outlines — cyan offset left, magenta offset right
+      ctx.shadowColor = '#3ddcff';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = 'rgba(61, 220, 255, 0.75)';
+      ctx.fillText(f.text, -4, 0);
+      ctx.shadowColor = '#ff2bd6';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = 'rgba(255, 43, 214, 0.75)';
+      ctx.fillText(f.text, 4, 0);
+
+      // Dark stroke for crisp edges
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = 'rgba(8, 0, 18, 0.9)';
+      ctx.strokeText(f.text, 0, 0);
+
+      // Main color-cycling fill on top
+      ctx.shadowColor = mainColor;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = mainColor;
+      ctx.fillText(f.text, 0, 0);
+
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      // Just "+N" text — the picked-up item itself disappears immediately
+      ctx.fillStyle = f.color;
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 12;
+      ctx.font = `900 ${Math.round(30 * scale)}px 'Courier New'`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(f.text, fx, fy);
+      ctx.restore();
+    }
   }
 }
 
@@ -2142,14 +2769,18 @@ function update(dt) {
   // Centrifugal force on curves
   player.x -= (dx * speedPct * startSeg.curve * CENTRIFUGAL);
 
-  // Speed
+  // Speed. AI BOOST raises the speed cap AND boosts the rate of
+  // acceleration — pressing UP during a boost feels noticeably snappier
+  // than during normal driving, on top of the higher top end.
   let topSpeed = MAX_SPEED;
+  let accelMul = 1.0;
   if (player.boostTimer > 0) {
     player.boostTimer -= dt;
     topSpeed = MAX_SPEED * 1.5;
+    accelMul = 2.5;          // 2.5× the baseline acceleration during boost
   }
   if (keys['ArrowUp']) {
-    player.speed = accel(player.speed, ACCEL, dt);
+    player.speed = accel(player.speed, ACCEL * accelMul, dt);
   } else if (keys['ArrowDown']) {
     player.speed = accel(player.speed, BRAKING, dt);
   } else {
@@ -2252,7 +2883,7 @@ function update(dt) {
         // Nitro stays high-priority because rivals using nitro is what
         // keeps the race competitive late.
         const D = diff();
-        const seekAhead = 6;
+        const seekAhead = D.seekAhead;
         let bestTarget = null;
         let bestScore = -Infinity;
         for (let k = 1; k <= seekAhead; k++) {
@@ -2271,7 +2902,7 @@ function update(dt) {
             // perfectly farm every sponsor/FM/allocator. Both knobs are
             // driven by the current difficulty setting.
             if (s.kind === 'nitro') {
-              if (dx > 0.85) continue;
+              if (dx > 0.9) continue;
             } else {
               if (dx > D.awareness) continue;
               if (Math.random() < D.missChance) continue;
@@ -2325,7 +2956,14 @@ function update(dt) {
 
       if (s.kind === 'sponsor' || s.kind === 'fm' || s.kind === 'allocator') {
         s.collected = true;
-        r.score += (s.kind === 'sponsor' ? 500 : (s.kind === 'allocator' ? 300 : 200));
+        // Pickup respawns after 1s so any racer behind can grab it too.
+        s.respawnAt = performance.now() + 1000;
+        // Rivals get the same 2× AI BOOST bonus the player does — while
+        // their nitroTimer is active, any sponsor / FM / allocator they
+        // scoop up pays double.
+        const rivalBoostMul = r.nitroTimer > 0 ? 2 : 1;
+        const basePts = (s.kind === 'sponsor' ? 500 : (s.kind === 'allocator' ? 300 : 200));
+        r.score += basePts * rivalBoostMul;
         continue;
       }
 
@@ -2394,12 +3032,10 @@ function update(dt) {
         r.spinoutTimer = 0.8; r.spinoutMax = 0.8;
         r.spinoutTotal = Math.PI * 2 * (Math.random() < 0.5 ? 1 : -1);
         player.speed *= 0.95; // glancing graze
-        showToast(`YOU BUMPED ${r.name}!`, '#ffd23f');
       } else {
         // The player eats the impact
         player.speed *= 0.6;
         r.speed *= 0.95; // glancing graze
-        showToast(`${r.name} BUMPED YOU!`, '#ff5577');
       }
     }
   }
@@ -2443,6 +3079,10 @@ function update(dt) {
 
   // Floater animation lifetimes
   updateFloaters(dt);
+  // AI BOOST burst animation (particles + streaks + text)
+  updateBoostBurst(dt);
+  // Hazard hit burst (PHISHED / OUTAGE / SNOW STORM)
+  updateHazardBurst(dt);
   // Phishing fish swim across the screen for ~1.4s after a phish hit
   updatePhishFish(dt);
 
@@ -2473,29 +3113,46 @@ function spriteBlocked(s) {
 }
 
 function handlePickup(s) {
+  // 2× score bonus on positive pickups while AI BOOST is active.
+  // The item counter (sponsors/fms/allocs) still ticks by 1 — only the
+  // SCORE doubles — and the floater label shows the multiplier so the
+  // player can see exactly when the bonus kicks in.
+  const boostMul = player.boostTimer > 0 ? 2 : 1;
   switch (s.kind) {
-    case 'sponsor':
+    case 'sponsor': {
       s.collected = true;
+      s.respawnAt = performance.now() + 1000;
       player.sponsors++;
-      player.score += 500;
-      addFloater('sponsor', 500, '#8CCECE');
+      const pts = 500 * boostMul;
+      player.score += pts;
+      const label = boostMul > 1 ? `+${pts} ×2` : `+${pts}`;
+      addFloater('sponsor', pts, '#8CCECE', label, boostMul > 1);
       // Every 3 sponsors → +1 boost charge (silent — visible in HUD)
       if (player.sponsors % 3 === 0 && player.boost < 3) {
         player.boost++;
       }
       break;
-    case 'fm':
+    }
+    case 'fm': {
       s.collected = true;
+      s.respawnAt = performance.now() + 1000;
       player.fms++;
-      player.score += 200;
-      addFloater('fm', 200, '#EEDE22');
+      const pts = 200 * boostMul;
+      player.score += pts;
+      const label = boostMul > 1 ? `+${pts} ×2` : `+${pts}`;
+      addFloater('fm', pts, '#EEDE22', label, boostMul > 1);
       break;
-    case 'allocator':
+    }
+    case 'allocator': {
       s.collected = true;
+      s.respawnAt = performance.now() + 1000;
       player.allocs++;
-      player.score += 300;
-      addFloater('allocator', 300, '#4FB871');
+      const pts = 300 * boostMul;
+      player.score += pts;
+      const label = boostMul > 1 ? `+${pts} ×2` : `+${pts}`;
+      addFloater('allocator', pts, '#4FB871', label, boostMul > 1);
       break;
+    }
     case 'nitro':
       // AI Boost pickups respawn after ~500ms so multiple racers can
       // share the same orb. Set collected + respawnAt; spriteBlocked()
@@ -2517,7 +3174,7 @@ function handlePickup(s) {
       player.score = player.score - 1000;
       player.hitTimer = 0.8;
       spawnPhishFish();
-      showToast('PHISHED! −1000', '#aaaaaa', 2.6);
+      triggerHazardBurst('phishing');
       break;
     case 'outage':
       if (player.hitTimer > 0) return;
@@ -2528,7 +3185,7 @@ function handlePickup(s) {
       player.spinoutTimer = 1.4;
       player.spinoutMax = 1.4;
       player.spinoutTotal = Math.PI * 4 * (Math.random() < 0.5 ? 1 : -1);
-      showToast('PLATFORM OUTAGE!', '#ff5566', 2.6);
+      triggerHazardBurst('outage');
       break;
     case 'snow':
       if (player.hitTimer > 0) return;
@@ -2540,7 +3197,7 @@ function handlePickup(s) {
       player.spinoutTimer = 0.9;
       player.spinoutMax = 0.9;
       player.spinoutTotal = Math.PI * 2.5 * (Math.random() < 0.5 ? 1 : -1);
-      showToast('SNOW STORM!', '#bbcfff', 2.6);
+      triggerHazardBurst('snow');
       break;
   }
 }
@@ -3409,6 +4066,66 @@ function drawPlayerBike(x, y, speed, hitFlash, rotation) {
   ctx.ellipse(x, y, w * 0.34, 18, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  // ===== AI BOOST AURA =====
+  // While the boost is active, wrap the bike in a pulsing neon halo
+  // (cyan core fading into magenta outer haze) plus a few short electric
+  // arcs flickering around the edges for that "supercharged" look.
+  if (player.boostTimer > 0) {
+    // Fade the aura out cleanly in the last 250ms of the boost so it
+    // doesn't pop off abruptly.
+    const fadeOut = clamp(player.boostTimer / 0.25, 0, 1);
+    const tNow = performance.now();
+    const pulse = 0.78 + 0.22 * Math.sin(tNow * 0.012);
+    const cy = y - 90;
+
+    ctx.save();
+    // Additive blending makes the glow read as light rather than paint
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Outer haze — wide soft gradient (magenta edge fading to nothing)
+    const gOuter = ctx.createRadialGradient(x, cy, 8, x, cy, 200);
+    gOuter.addColorStop(0,   `rgba(255, 90, 230, ${0.40 * pulse * fadeOut})`);
+    gOuter.addColorStop(0.5, `rgba(190, 40, 230, ${0.18 * pulse * fadeOut})`);
+    gOuter.addColorStop(1,   'rgba(120, 30, 220, 0)');
+    ctx.fillStyle = gOuter;
+    ctx.fillRect(x - 220, cy - 200, 440, 380);
+
+    // Inner bright core — tight cyan glow hugging the bike
+    const gInner = ctx.createRadialGradient(x, cy, 4, x, cy, 110);
+    gInner.addColorStop(0,   `rgba(220, 255, 255, ${0.85 * pulse * fadeOut})`);
+    gInner.addColorStop(0.4, `rgba(61, 220, 255, ${0.55 * pulse * fadeOut})`);
+    gInner.addColorStop(1,   'rgba(61, 220, 255, 0)');
+    ctx.fillStyle = gInner;
+    ctx.fillRect(x - 130, cy - 130, 260, 250);
+
+    // Electric arc flickers — short jagged lines arcing around the bike.
+    // Re-randomized each frame for that crackling look.
+    ctx.strokeStyle = `rgba(220, 250, 255, ${0.85 * fadeOut})`;
+    ctx.shadowColor = '#3ddcff';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 1.6;
+    const arcs = 4;
+    for (let i = 0; i < arcs; i++) {
+      if (Math.random() > 0.55) continue;            // only some arcs flicker each frame
+      const ang = Math.random() * Math.PI * 2;
+      const r0 = 60 + Math.random() * 30;
+      const r1 = r0 + 14 + Math.random() * 20;
+      const sx = x + Math.cos(ang) * r0;
+      const sy = cy + Math.sin(ang) * r0 * 0.85;
+      const ex = x + Math.cos(ang) * r1;
+      const ey = cy + Math.sin(ang) * r1 * 0.85;
+      const midX = (sx + ex) / 2 + (Math.random() - 0.5) * 14;
+      const midY = (sy + ey) / 2 + (Math.random() - 0.5) * 14;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(midX, midY);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
   // Rear tire (viewed from behind — vertical orientation)
   ctx.fillStyle = '#0a0a0a';
   ctx.beginPath();
@@ -3701,6 +4418,12 @@ function render() {
 
   // Pickup floaters in front of bike, behind weather/HUD
   renderFloaters();
+
+  // Flashy "AI BOOST!" burst when player triggers a boost
+  renderBoostBurst();
+
+  // Hazard hit burst (PHISHED / PLATFORM OUTAGE / SNOW STORM)
+  renderHazardBurst();
 
   // Phishing fish flying across the screen on phish hit
   renderPhishFish();
