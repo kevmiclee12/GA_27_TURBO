@@ -1940,7 +1940,7 @@ function endGame() {
   // Award finish-place bonuses (1st / 2nd / 3rd) based on race time. Other
   // bonus triggers can be added to r.bonus later — we keep it as a single
   // additive column so the math stays visible on the end screen.
-  const FINISH_BONUSES = [2500, 1000, 500];
+  const FINISH_BONUSES = [5000, 2500, 1000];
   const byTime = [...racers].sort((a, b) => a.time - b.time);
   byTime.forEach((r, idx) => {
     r.bonus = (r.bonus || 0) + (FINISH_BONUSES[idx] || 0);
