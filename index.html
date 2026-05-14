@@ -740,10 +740,14 @@ const DIFFICULTY = {
   easy:      { label: 'EASY',      speedMul: 0.85, missChance: 0.50, awareness: 0.40, steerSpeed: 0.85, hazardBoost: 1.0, seekAhead: 5, reachMul:  1.0},
   normal:    { label: 'NORMAL',    speedMul: 0.9, missChance: 0.25, awareness: 0.65, steerSpeed: 1.15, hazardBoost: 1.0, seekAhead: 6, reachMul: 1.6 },
   hard:      { label: 'HARD',      speedMul: 1.00, missChance: 0.00, awareness: 0.85, steerSpeed: 1.45, hazardBoost: 1.0, seekAhead: 7, reachMul: 2.4 },
-  nightmare: { label: 'NIGHTMARE', speedMul: 1.04, missChance: 0.00, awareness: 0.85, steerSpeed: 1.75, hazardBoost: 1.6, seekAhead: 8, reachMul: 2.8 },
+  nightmare: { label: 'NIGHTMARE', speedMul: 1.04, missChance: 0.00, awareness: 0.85, steerSpeed: 1.75, hazardBoost: 1.0, seekAhead: 8, reachMul: 2.8 },
 };
 let currentDifficulty = 'normal';
 function diff() { return DIFFICULTY[currentDifficulty]; }
+// Nightmare mode swaps the entire palette to a darker, blood-red,
+// "evil-looking" scheme and triggers occasional grayscale flash events.
+// Helper is read from inside the per-frame draw routines.
+function isNightmare() { return currentDifficulty === 'nightmare'; }
 
 // =====================================================================
 // STATE
@@ -752,6 +756,13 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
 let segments = [];
+// Captured in buildTrack() once the racing portion is in place but
+// BEFORE the post-finish buffer is appended. Everything that asks
+// "where is the finish line?" or "how long is the race?" reads these
+// rather than (segments.length - 6) * SEG_LEN so the buffer pad
+// doesn't shift the answer.
+let finishLineZ = 0;
+let racingTrackEnd = 0;
 let rivals = [];
 let player;
 let keys = {};
@@ -771,6 +782,13 @@ let preAccelBonusAwarded = false;
 let stars = [];
 let palms = [];
 let fadeIn = 1;
+// iConnections roadside-billboard logo. Loaded once at startup; renders
+// inside drawIcBillboard() once ready, falls back to text if it isn't.
+const icLogo = new Image();
+let icLogoReady = false;
+icLogo.onload = () => { icLogoReady = true; };
+icLogo.onerror = () => { icLogoReady = false; };
+icLogo.src = 'assets/icon_logo.svg';
 let buildings = []; // { x, h, w, windows:[[r,c]] }
 let floaters = []; // pickup feedback: rising icon + "+N" points
 // Flashy boost-trigger animation. age advances each frame; when age >=
@@ -781,6 +799,36 @@ let boostBurst = { active: false, age: 0, duration: 1.15, particles: [], streaks
 // Same shape as boostBurst, plus a palette object so each hazard renders
 // in its own colors and a flavor flag for hazard-specific particle motion.
 let hazardBurst = { active: false, age: 0, duration: 1.6, label: '', palette: null, flavor: 'crash', particles: [], streaks: [] };
+// Scurrying bugs — Nightmare-only mobile hazard. Each entry has:
+//   z       — track-z position (unlike sprites, bugs aren't bound to a segment)
+//   x       — current lateral offset (animated each frame)
+//   vx      — lateral velocity in road-width units per second (varied per bug)
+//   phase   — animation phase for leg + body wiggle
+//   age     — seconds since spawn
+//   palette — body/back/accent colors
+//   hit     — set true once a racer collides; bug is removed next frame
+let bugs = [];
+let bugSpawnTimer = 0;
+// Nightmare-only screen-flash. Less frequent than a typical strobe but
+// each event is a STACCATO BURST — 6 sharp grayscale pulses with quick
+// gaps between them, like a malfunctioning monitor. age advances in
+// the update tick; the render pass reads it once per frame and pulls
+// the per-frame intensity from NIGHTMARE_STROBE_PULSES.
+let nightmareFlash = { active: false, age: 0, duration: 2.2 };
+let nightmareFlashTimer = 0; // countdown to next flash event (seconds)
+// Each entry is [pulseStart, pulseDuration] within the flash event.
+// Hand-tuned so the rhythm feels punchy + irregular (not metronomic):
+// quick double-tap up front, a hold, a quick triple, and one decisive
+// closer. Total span sits just under nightmareFlash.duration.
+const NIGHTMARE_STROBE_PULSES = [
+  [0.00, 0.13],
+  [0.22, 0.13],
+  [0.55, 0.18],
+  [0.90, 0.10],
+  [1.10, 0.10],
+  [1.30, 0.12],
+  [1.70, 0.32],   // final, longer hold so the desaturation is unmistakable
+];
 
 // =====================================================================
 // UTIL
@@ -884,8 +932,20 @@ function buildTrack() {
   for (let n = 0; n < 6; n++) segments[n].color = 'START';
   for (let n = segments.length - 12; n < segments.length; n++) segments[n].color = 'FINISH';
 
-  // Place sprites
+  // Snapshot the racing endpoints BEFORE appending the post-finish
+  // buffer so they stay pinned to the real finish line.
+  finishLineZ    = (segments.length - 6) * SEG_LEN;
+  racingTrackEnd = segments.length * SEG_LEN;
+
+  // Place sprites — bounded by segments.length at this point, so items
+  // never land in the post-finish buffer.
   placeSprites();
+
+  // Post-finish buffer — plain straight road, no items, large enough
+  // that with player.z pinned at finishLineZ the renderer's forward
+  // DRAW_DIST look-ahead can never wrap around to the starting line
+  // during the 3-second celebration pause.
+  addStraight(260);
 
   // Re-snap track length
   // (TRACK_LENGTH constant is approximate; rivals use segments.length)
@@ -903,9 +963,19 @@ function placeSprites() {
     if (Math.random() < 0.28) {
       seg.sprites.push({ kind: 'palm', offset: 1.05 + Math.random() * 0.6 });
     }
-    if (Math.random() < 0.08) {
-      seg.sprites.push({ kind: 'billboard', offset: (Math.random() < 0.5 ? -1.6 : 1.6) });
-    }
+  }
+
+  // Periodic iConnections billboards on alternating sides of the track.
+  // These are purely decorative — collision is skipped for ic_billboard
+  // sprites, and rivals ignore them entirely.
+  const IC_SPACING = 360;        // segments between iC billboards
+  let icIdx = 0;
+  for (let i = 60; i < total - 60; i += IC_SPACING) {
+    // Small per-billboard jitter so they don't feel mechanically uniform.
+    const segIdx = i + ((Math.random() * 16) | 0) - 8;
+    const side = (icIdx % 2 === 0) ? -1.85 : 1.85;
+    segments[segIdx].sprites.push({ kind: 'ic_billboard', offset: side });
+    icIdx++;
   }
 
   // Pickups & hazards on the road (between -0.85 and 0.85 lateral)
@@ -1047,6 +1117,10 @@ function resetPlayer() {
     spinoutAngle: 0,    // current rotation
     finished: false,
     finishTime: null,
+    // Set when the player crosses the finish line; endGame() defers
+    // until performance.now() reaches this timestamp so we get a 3s
+    // celebration pause before the results overlay snaps in.
+    finishOverlayAt: 0,
     startTime: performance.now()
   };
 }
@@ -1073,7 +1147,7 @@ let musicTimer = null;
 let musicNextTime = 0;
 let musicStep = 0;
 
-const MUSIC_BPM = 124;
+const MUSIC_BPM = currentDifficulty === 'nightmare' ? 148 : 124;
 const MUSIC_SIXTEENTH = 60 / MUSIC_BPM / 4; // seconds per 16th
 const MUSIC_BARS = 32;                      // A·A·B·B·Bridge·Bridge·A·A, 4 bars each
 const MUSIC_STEPS = MUSIC_BARS * 16;
@@ -1829,6 +1903,15 @@ function startGame() {
   hazardBurst.age = 0;
   hazardBurst.particles = [];
   hazardBurst.streaks = [];
+  bugs = [];
+  // First bug shows up after a short grace period so the first few
+  // seconds of a Nightmare race aren't immediately punishing.
+  bugSpawnTimer = 3.5;
+  // Same idea for the Nightmare-only screen flash — give the player a
+  // moment to read the road before the first wash hits.
+  nightmareFlash.active = false;
+  nightmareFlash.age = 0;
+  nightmareFlashTimer = 6;
   countdownTimer = 3.6; // 3 ... 2 ... 1 ... GO!
   lastCountdownLabel = null;
   phishFish = [];
@@ -1897,8 +1980,8 @@ function endGame() {
   const titleEl = document.getElementById('endTitle');
   const statsEl = document.getElementById('endStats');
   const logoEl  = document.getElementById('endLogo');
-  const trackTotal = segments.length * SEG_LEN;
-  const finishZ   = (segments.length - 6) * SEG_LEN;
+  const trackTotal = racingTrackEnd;
+  const finishZ   = finishLineZ;
   const now       = performance.now();
   const startMs   = player.startTime;
 
@@ -2160,6 +2243,19 @@ const HAZARD_PALETTES = {
     flavor:       'blizzard',
     duration:     1.5,
   },
+  bug: {
+    label:        'BUG!',
+    main:         '#b8ff4d',     // bright neon green
+    accent:       '#ff5d8f',     // hot pink chromatic offset
+    accent2:      '#ffffff',
+    glow:         '#7af535',
+    bandTop:      'rgba(10, 26, 4, 0)',
+    bandMid:      'rgba(160, 255, 90, 0.34)',
+    streak:       'rgba(180, 255, 130, ',
+    particles:    ['#b8ff4d', '#7af535', '#ffffff', '#5a3a18'],
+    flavor:       'crash',
+    duration:     1.45,
+  },
 };
 
 function triggerHazardBurst(kind) {
@@ -2402,6 +2498,192 @@ function renderHazardBurst() {
   ctx.restore();
 }
 
+// =====================================================================
+// SCURRYING BUGS — Nightmare-only mobile hazard
+// =====================================================================
+// Bugs are independent dynamic entities, NOT items on the segment.sprites
+// list — they have their own z and an animated x. Spawning periodically
+// during racing (Nightmare only), each bug crosses the road at a randomly
+// chosen lateral speed, despawns once it scoots past the opposite edge,
+// and triggers a spinout (matching the platform-outage profile) if a
+// racer drives through it. We pick a fresh palette per bug so the swarm
+// reads as varied wildlife rather than identical clones.
+// Bright neon palettes so the bugs pop hard against the Nightmare
+// blackout backdrop. Each entry also carries a `glow` color used to
+// render an additive halo around the body so the bug reads as
+// luminous, not just brightly painted.
+const BUG_PALETTES = [
+  { body: '#7eff2b', back: '#c8ff7a', accent: '#ffffff', glow: '#a4ff4d' }, // toxic neon green
+  { body: '#ff3a8a', back: '#ff8ab8', accent: '#ffe14a', glow: '#ff5db0' }, // hot magenta
+  { body: '#ff8a1a', back: '#ffc070', accent: '#ffffff', glow: '#ffae3c' }, // acid orange
+  { body: '#c83dff', back: '#e88aff', accent: '#ffe14a', glow: '#d066ff' }, // electric purple
+  { body: '#3ddcff', back: '#86eaff', accent: '#ffffff', glow: '#5ee4ff' }, // poison cyan
+];
+
+function spawnBug() {
+  // Pick a side. side === -1 → starts on the left, scurries right.
+  //              side ===  1 → starts on the right, scurries left.
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const startX = side * (1.35 + Math.random() * 0.25);
+  const speed = rand(0.45, 1.85);              // road-width units / sec
+  // Spawn z is a comfortable distance ahead of the player so the bug is
+  // visible coming up rather than popping into existence under the bike.
+  const aheadSegs = 35 + Math.random() * 90;
+  bugs.push({
+    z: (player.z + PLAYER_Z) + aheadSegs * SEG_LEN,
+    x: startX,
+    vx: -side * speed,
+    phase: Math.random() * Math.PI * 2,
+    age: 0,
+    palette: choose(BUG_PALETTES),
+    hit: false,
+  });
+}
+
+function updateBugs(dt) {
+  // Spawning only during a Nightmare race.
+  if (currentDifficulty === 'nightmare' && gameState === 'racing' && !player.finished) {
+    bugSpawnTimer -= dt;
+    if (bugSpawnTimer <= 0) {
+      spawnBug();
+      // Variable interval keeps the rhythm from feeling metronomic. The
+      // occasional cluster of two bugs back-to-back adds tension.
+      bugSpawnTimer = rand(0.55, 1.9);
+    }
+  }
+  // Animate active bugs.
+  for (const b of bugs) {
+    b.x += b.vx * dt;
+    b.age += dt;
+    b.phase += dt * 26;        // leg / body wiggle frequency
+  }
+  // Cull bugs that have walked off the opposite side or that the player
+  // has already driven past.
+  if (bugs.length) {
+    const playerZ = player.z + PLAYER_Z;
+    bugs = bugs.filter(b => {
+      if (b.hit) return false;
+      if (b.x > 1.85 || b.x < -1.85) return false;
+      if ((b.z - playerZ) < -SEG_LEN * 4) return false;
+      return true;
+    });
+  }
+}
+
+// Per-bug shape — a stylized scurrying critter with 6 wiggling legs,
+// curved antennae, a carapace highlight, and a single eye on the leading
+// edge. Direction-of-travel is read off b.vx so the head + antennae
+// always lead.
+function drawBug(x, y, w, h, b) {
+  if (w < 3) return;
+  const dir = b.vx >= 0 ? 1 : -1;
+  const bodyCy = y - h * 0.40;
+  const bodyRx = w * 0.45;
+  const bodyRy = h * 0.36;
+  const bounce = Math.sin(b.phase) * h * 0.06;
+  const glow = b.palette.glow || b.palette.body;
+
+  ctx.save();
+  ctx.translate(x, bodyCy + bounce);
+
+  // Ground shadow — sits at ground line beneath the bouncing body.
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(0, h * 0.42 - bounce, bodyRx * 1.05, h * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Luminous halo — soft additive glow around the whole bug so it
+  // pops against the dark Nightmare backdrop. Drawn before the body
+  // so the body's solid colors sit cleanly on top.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const haloPulse = 0.65 + 0.35 * Math.sin(b.phase * 0.7);
+  const haloGrad = ctx.createRadialGradient(0, 0, bodyRx * 0.2, 0, 0, bodyRx * 2.0);
+  haloGrad.addColorStop(0,    `${glow}cc`);
+  haloGrad.addColorStop(0.45, `${glow}55`);
+  haloGrad.addColorStop(1,    `${glow}00`);
+  ctx.fillStyle = haloGrad;
+  ctx.globalAlpha = haloPulse;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, bodyRx * 2.0, bodyRy * 1.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Legs — 3 pairs, alternating swing direction so the gait reads.
+  ctx.strokeStyle = b.palette.body;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(1, w * 0.045);
+  for (let i = 0; i < 3; i++) {
+    const px = (i - 1) * bodyRx * 0.55;
+    const swing = Math.sin(b.phase + i * 1.15) * (w * 0.18);
+    // upper-side leg
+    ctx.beginPath();
+    ctx.moveTo(px, -bodyRy * 0.5);
+    ctx.lineTo(px + swing, -bodyRy * 1.10);
+    ctx.stroke();
+    // opposite-side leg, counter-phase
+    ctx.beginPath();
+    ctx.moveTo(px, bodyRy * 0.5);
+    ctx.lineTo(px - swing, bodyRy * 1.10);
+    ctx.stroke();
+  }
+
+  // Body oval.
+  ctx.fillStyle = b.palette.body;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, bodyRx, bodyRy, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Carapace highlight (top half).
+  ctx.fillStyle = b.palette.back;
+  ctx.beginPath();
+  ctx.ellipse(0, -bodyRy * 0.18, bodyRx * 0.78, bodyRy * 0.52, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spine line down the centre.
+  ctx.strokeStyle = b.palette.accent;
+  ctx.lineWidth = Math.max(0.5, w * 0.014);
+  ctx.beginPath();
+  ctx.moveTo(-bodyRx * 0.85, -bodyRy * 0.05);
+  ctx.lineTo(bodyRx * 0.85, -bodyRy * 0.05);
+  ctx.stroke();
+
+  // Head bump on leading edge.
+  ctx.fillStyle = b.palette.body;
+  ctx.beginPath();
+  ctx.ellipse(dir * bodyRx * 0.88, 0, bodyRx * 0.32, bodyRy * 0.58, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Antennae — both sweep forward from the head with a soft wobble.
+  ctx.strokeStyle = b.palette.body;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(0.8, w * 0.028);
+  for (let s = -1; s <= 1; s += 2) {
+    const wob = Math.sin(b.phase * 1.4 + s) * w * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(dir * bodyRx * 1.05, s * bodyRy * 0.22);
+    ctx.quadraticCurveTo(
+      dir * bodyRx * 1.45, s * bodyRy * 0.85 + wob,
+      dir * bodyRx * 1.75, s * bodyRy * 1.05 + wob
+    );
+    ctx.stroke();
+  }
+
+  // Eye on the leading edge (only when bug is big enough to read it).
+  if (w > 14) {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(dir * bodyRx * 1.02, -bodyRy * 0.05, Math.max(1, w * 0.028), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(dir * bodyRx * 1.02 + dir * w * 0.012, -bodyRy * 0.05, Math.max(0.5, w * 0.016), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 function updateBoostBurst(dt) {
   if (!boostBurst.active) return;
   boostBurst.age += dt;
@@ -2587,7 +2869,7 @@ const hud = {
 
 function updateHUD() {
   hud.score.textContent = player.score.toLocaleString();
-  const trackLen = segments.length * SEG_LEN;
+  const trackLen = racingTrackEnd;
   const ronPct = Math.min(100, Math.floor(player.z / trackLen * 100));
   hud.speed.textContent = Math.floor(player.speed / 60);
   hud.nitro.textContent = player.boost;
@@ -2754,32 +3036,55 @@ function update(dt) {
   const speedPct = player.speed / MAX_SPEED;
   const dx = dt * 2 * speedPct;
 
-  // Move forward
-  player.z = increase(player.z, dt * player.speed, segments.length * SEG_LEN);
-  if (player.z >= (segments.length - 6) * SEG_LEN && !player.finished) {
-    player.finished = true;
-    player.finishTime = performance.now();
-    endGame();
-    return;
+  // Move forward. Once the player crosses the finish line we stamp the
+  // moment, hold gameState in 'racing' for a 3-second celebration pause,
+  // then fire endGame() — gives the player time to see the Convention
+  // Center loom in front of them before the results overlay snaps in.
+  if (!player.finished) {
+    player.z = increase(player.z, dt * player.speed, segments.length * SEG_LEN);
+    if (player.z >= finishLineZ) {
+      player.finished = true;
+      player.finishTime = performance.now();
+      player.finishOverlayAt = performance.now() + 3000;
+      // Pin z at the finish line right away — keeps the next branch
+      // and the very-next render from advancing into the buffer.
+      player.z = finishLineZ;
+    }
+  } else {
+    // Post-finish: hold the camera at the finish line. The bike's
+    // speed continues to bleed off (handled below) so the speed gauge,
+    // motion blur and bike wobble all wind down naturally even though
+    // player.z isn't advancing. The 260-segment buffer past finishLineZ
+    // means the renderer's forward look-ahead won't wrap to the start.
+    player.z = finishLineZ;
+    if (performance.now() >= player.finishOverlayAt) {
+      endGame();
+      return;
+    }
   }
 
-  // Steering
-  if (keys['ArrowLeft'])  player.x -= dx;
-  if (keys['ArrowRight']) player.x += dx;
-  // Centrifugal force on curves
-  player.x -= (dx * speedPct * startSeg.curve * CENTRIFUGAL);
+  // Steering — frozen after finish so the bike coasts straight ahead.
+  if (!player.finished) {
+    if (keys['ArrowLeft'])  player.x -= dx;
+    if (keys['ArrowRight']) player.x += dx;
+    // Centrifugal force on curves
+    player.x -= (dx * speedPct * startSeg.curve * CENTRIFUGAL);
+  }
 
   // Speed. AI BOOST raises the speed cap AND boosts the rate of
   // acceleration — pressing UP during a boost feels noticeably snappier
   // than during normal driving, on top of the higher top end.
   let topSpeed = MAX_SPEED;
   let accelMul = 1.0;
-  if (player.boostTimer > 0) {
+  if (player.boostTimer > 0 && !player.finished) {
     player.boostTimer -= dt;
     topSpeed = MAX_SPEED * 1.5;
     accelMul = 2.5;          // 2.5× the baseline acceleration during boost
   }
-  if (keys['ArrowUp']) {
+  if (player.finished) {
+    // After finish: ignore inputs and ease the bike toward a stop.
+    player.speed = accel(player.speed, DECEL * 1.5, dt);
+  } else if (keys['ArrowUp']) {
     player.speed = accel(player.speed, ACCEL * accelMul, dt);
   } else if (keys['ArrowDown']) {
     player.speed = accel(player.speed, BRAKING, dt);
@@ -2819,15 +3124,42 @@ function update(dt) {
   }
 
   // Sprite collisions
-  // Only check the segment the player is currently in
-  const playerSeg = findSegment(player.z + PLAYER_Z);
-  for (const s of playerSeg.sprites) {
-    if (s.kind === 'palm' || s.kind === 'billboard') continue;
-    if (spriteBlocked(s)) continue;
-    const playerHalfW = 0.15;
-    const spriteHalfW = 0.13;
-    if (Math.abs(player.x - s.offset) < (playerHalfW + spriteHalfW)) {
-      handlePickup(s);
+  // Only check the segment the player is currently in. After the
+  // player has crossed the finish line all hazards / pickups are
+  // suppressed so the celebration pause stays calm.
+  if (!player.finished) {
+    const playerSeg = findSegment(player.z + PLAYER_Z);
+    for (const s of playerSeg.sprites) {
+      if (s.kind === 'palm' || s.kind === 'ic_billboard') continue;
+      if (spriteBlocked(s)) continue;
+      const playerHalfW = 0.15;
+      const spriteHalfW = 0.13;
+      if (Math.abs(player.x - s.offset) < (playerHalfW + spriteHalfW)) {
+        handlePickup(s);
+      }
+    }
+  }
+
+  // Bug collisions — bugs are dynamic off-segment entities, so we check
+  // them against the player by absolute z + x rather than going through
+  // segment.sprites. Matches the platform-outage profile: heavy spinout,
+  // 1.6s hitTimer, ~0.4× speed dump, plus the BUG! hazard burst.
+  if (!player.finished && player.hitTimer <= 0 && bugs.length) {
+    const playerZ = player.z + PLAYER_Z;
+    for (const b of bugs) {
+      if (b.hit) continue;
+      const dz = b.z - playerZ;
+      if (Math.abs(dz) > SEG_LEN * 0.6) continue;
+      if (Math.abs(b.x - player.x) > 0.20) continue;
+      b.hit = true;
+      player.speed *= 0.4;
+      player.hitTimer = 1.6;
+      shake = 0.5;
+      player.spinoutTimer = 1.4;
+      player.spinoutMax = 1.4;
+      player.spinoutTotal = Math.PI * 4 * (Math.random() < 0.5 ? 1 : -1);
+      triggerHazardBurst('bug');
+      break;
     }
   }
 
@@ -2997,6 +3329,8 @@ function update(dt) {
       }
       // Phishing emails do NOT affect rivals — they're a player-only event.
     }
+    // Bugs do NOT affect rivals — they pass through harmlessly. Bugs
+    // are a player-only hazard, similar to phishing.
     // Decay rival hazard cooldown + spinout
     if (r.hazardCool > 0) r.hazardCool -= dt;
     if (r.spinoutTimer > 0) {
@@ -3046,11 +3380,10 @@ function update(dt) {
   // can use real finish times when awarding placement bonuses, and cap
   // their z so the progress bar doesn't drift past 100%.
   for (const r of rivals) {
-    const finishZ = (segments.length - 6) * SEG_LEN;
-    if (r.z >= finishZ && !r.finishTime) {
+    if (r.z >= finishLineZ && !r.finishTime) {
       r.finishTime = performance.now();
     }
-    if (r.z > finishZ) r.z = finishZ;
+    if (r.z > finishLineZ) r.z = finishLineZ;
   }
 
   // Weather decay — snowstorm animation only fires when the PLAYER hits a
@@ -3081,10 +3414,33 @@ function update(dt) {
   updateFloaters(dt);
   // AI BOOST burst animation (particles + streaks + text)
   updateBoostBurst(dt);
-  // Hazard hit burst (PHISHED / OUTAGE / SNOW STORM)
+  // Hazard hit burst (PHISHED / OUTAGE / SNOW STORM / BUG!)
   updateHazardBurst(dt);
   // Phishing fish swim across the screen for ~1.4s after a phish hit
   updatePhishFish(dt);
+  // Scurrying bugs (Nightmare only) — spawn, animate, cull
+  updateBugs(dt);
+  // Nightmare-only screen flash — every few seconds the whole scene
+  // briefly washes to grayscale (with a quick white pop on the leading
+  // edge) and snaps back. Skipped entirely in other difficulties.
+  if (isNightmare() && gameState === 'racing' && !player.finished) {
+    if (!nightmareFlash.active) {
+      nightmareFlashTimer -= dt;
+      if (nightmareFlashTimer <= 0) {
+        nightmareFlash.active = true;
+        nightmareFlash.age = 0;
+        // Next event 14–24 seconds out so the staccato burst hits as a
+        // surprise rather than a metronome.
+        nightmareFlashTimer = rand(14, 24);
+      }
+    } else {
+      nightmareFlash.age += dt;
+      if (nightmareFlash.age >= nightmareFlash.duration) {
+        nightmareFlash.active = false;
+        nightmareFlash.age = 0;
+      }
+    }
+  }
 
   // Fade in
   if (fadeIn > 0) fadeIn = Math.max(0, fadeIn - dt * 0.6);
@@ -3208,6 +3564,17 @@ function handlePickup(s) {
 function colorFor(name, fog) {
   // returns {road, grass, rumble, lane}
   let palette;
+  if (isNightmare()) {
+    // Nightmare palette — desaturated, blood-red rumble strips, near-
+    // black grass + asphalt. START / FINISH stay light so the player
+    // can still pick them out at speed.
+    if      (name === 'LIGHT')  palette = { road: '#1c1018', grass: '#0a0306', rumble: '#7a0d18', lane: '#5a3a3a' };
+    else if (name === 'DARK')   palette = { road: '#15090f', grass: '#050204', rumble: '#5a0a14', lane: null };
+    else if (name === 'START')  palette = { road: '#d8d8d8', grass: '#0a0306', rumble: '#8a8a8a', lane: '#d8d8d8' };
+    else if (name === 'FINISH') palette = { road: '#0a0608', grass: '#0a0306', rumble: '#cccccc', lane: null };
+    else                        palette = { road: '#1c1018', grass: '#0a0306', rumble: '#7a0d18', lane: '#5a3a3a' };
+    return palette;
+  }
   if (name === 'LIGHT') palette = { road: '#3a3450', grass: '#241544', rumble: '#ff2bd6', lane: '#ffffff' };
   else if (name === 'DARK') palette = { road: '#2a2440', grass: '#1a0a36', rumble: '#ffffff', lane: null };
   else if (name === 'START') palette = { road: '#ffffff', grass: '#241544', rumble: '#ffffff', lane: '#ffffff' };
@@ -3217,72 +3584,244 @@ function colorFor(name, fog) {
 }
 
 function drawSky() {
-  // Synthwave sky gradient
+  const nightmare = isNightmare();
+  // Sky gradient — synthwave by default, hellish blood-and-soot in Nightmare.
   const g = ctx.createLinearGradient(0, 0, 0, H * 0.62);
-  g.addColorStop(0, '#0a0030');
-  g.addColorStop(0.45, '#3b0066');
-  g.addColorStop(0.78, '#ff2bd6');
-  g.addColorStop(1, '#ffb347');
+  if (nightmare) {
+    g.addColorStop(0,    '#040006');
+    g.addColorStop(0.45, '#150006');
+    g.addColorStop(0.78, '#3a060c');
+    g.addColorStop(1,    '#6a1410');
+  } else {
+    g.addColorStop(0, '#0a0030');
+    g.addColorStop(0.45, '#3b0066');
+    g.addColorStop(0.78, '#ff2bd6');
+    g.addColorStop(1, '#ffb347');
+  }
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H * 0.62);
 
-  // Stars
-  ctx.fillStyle = '#fff';
+  // Stars — dimmer + slightly reddish in Nightmare.
+  ctx.fillStyle = nightmare ? '#bba0a0' : '#fff';
   for (const s of stars) {
-    ctx.globalAlpha = s.tw;
+    ctx.globalAlpha = nightmare ? s.tw * 0.55 : s.tw;
     ctx.fillRect(s.x, s.y, s.r, s.r);
   }
   ctx.globalAlpha = 1;
 
-  // Sun
+  // Sun — sickly blood-orange in Nightmare instead of the warm orange-pink.
   const horizon = H * 0.58;
   const sunR = 90;
   const sunGrad = ctx.createLinearGradient(W/2, horizon - sunR, W/2, horizon + sunR);
-  sunGrad.addColorStop(0, '#ffe14a');
-  sunGrad.addColorStop(0.5, '#ff7a3c');
-  sunGrad.addColorStop(1, '#ff2bd6');
+  if (nightmare) {
+    sunGrad.addColorStop(0,   '#8a0a0a');
+    sunGrad.addColorStop(0.5, '#b3140e');
+    sunGrad.addColorStop(1,   '#2a0408');
+  } else {
+    sunGrad.addColorStop(0, '#ffe14a');
+    sunGrad.addColorStop(0.5, '#ff7a3c');
+    sunGrad.addColorStop(1, '#ff2bd6');
+  }
   ctx.fillStyle = sunGrad;
   ctx.beginPath();
   ctx.arc(W/2, horizon - 8, sunR, 0, Math.PI * 2);
   ctx.fill();
   // Sun horizontal slats
-  ctx.fillStyle = '#0a0030';
+  ctx.fillStyle = nightmare ? '#040006' : '#0a0030';
   for (let i = 0; i < 6; i++) {
     const y = horizon - 8 + i * 12 + 6;
     if (y < horizon - 8 + sunR) ctx.fillRect(W/2 - sunR, y, sunR * 2, 3 + i);
   }
 
-  // Distant skyline (precomputed)
+  // Distant skyline — near-black silhouettes with crimson windows in Nightmare.
+  const bldgFill   = nightmare ? 'rgba(4, 0, 2, 0.96)' : 'rgba(20,0,40,0.92)';
+  const windowFill = nightmare ? '#8a1418' : '#67d2ff';
   for (const b of buildings) {
     const top = horizon - b.h - 4;
-    ctx.fillStyle = 'rgba(20,0,40,0.92)';
+    ctx.fillStyle = bldgFill;
     ctx.fillRect(b.x - b.w/2, top, b.w, b.h + 4);
-    ctx.fillStyle = '#67d2ff';
+    ctx.fillStyle = windowFill;
     for (const [r, c] of b.windows) {
       ctx.fillRect(b.x - b.w/2 + 2 + c * 6, top + 4 + r * 8, 2, 3);
     }
   }
 
-  // Horizon glow line
+  // Miami Beach Convention Center — destination structure that grows
+  // out of the horizon as the player approaches the finish line. Draws
+  // OVER the distant skyline (so the convention center obscures the
+  // generic buildings as it gets close) but UNDER the horizon glow.
+  drawConventionCenter();
+
+  // Horizon glow line — dim crimson in Nightmare, magenta otherwise.
   const glow = ctx.createLinearGradient(0, horizon - 2, 0, horizon + 6);
-  glow.addColorStop(0, 'rgba(255,43,214,0)');
-  glow.addColorStop(0.5, 'rgba(255,43,214,0.9)');
-  glow.addColorStop(1, 'rgba(255,43,214,0)');
+  if (nightmare) {
+    glow.addColorStop(0,   'rgba(140, 12, 18, 0)');
+    glow.addColorStop(0.5, 'rgba(140, 12, 18, 0.85)');
+    glow.addColorStop(1,   'rgba(140, 12, 18, 0)');
+  } else {
+    glow.addColorStop(0, 'rgba(255,43,214,0)');
+    glow.addColorStop(0.5, 'rgba(255,43,214,0.9)');
+    glow.addColorStop(1, 'rgba(255,43,214,0)');
+  }
   ctx.fillStyle = glow;
   ctx.fillRect(0, horizon - 2, W, 8);
 }
 
-function drawGround() {
+// Miami Beach Convention Center — the player's destination. Renders at
+// the road's vanishing point with size driven by how close player.z is
+// to the finish line. Distinctive features lifted from the real
+// building's facade: an undulating row of vertical aluminum fins on
+// top, a thin glass canopy strip with a turquoise tint, and a long
+// dark-blue glass curtain wall on the ground floor with vertical
+// mullions and a signage band. Skipped entirely until the player is
+// within ~240 segments of the finish so it doesn't compete with the
+// regular skyline during the bulk of the race.
+function drawConventionCenter() {
+  if (!segments.length || !player) return;
+  const distSegs = (finishLineZ - player.z) / SEG_LEN;
+  if (distSegs > 240 || distSegs < -10) return;
+  // Cubic ease so the building grows mostly during the final approach
+  // rather than smoothly across the whole 240-segment window.
+  const raw = clamp(1 - distSegs / 240, 0, 1);
+  const t = Math.pow(raw, 1.8);
+  if (t < 0.02) return;
+
   const horizon = H * 0.58;
-  // Pink/purple ground gradient
+  const cx = W / 2;
+  const baseW = 200 + 1200 * t;
+  const baseH = 70 + 360 * t;
+  const leftX = cx - baseW / 2;
+  const topY = horizon - baseH;
+
+  // Layout — heights of the four facade sections from top down.
+  const finsH   = baseH * 0.42;
+  const trimH   = Math.max(1, baseH * 0.012);
+  const canopyH = baseH * 0.07;
+  const groundH = baseH - finsH - trimH - canopyH;
+
+  const finsTopY    = topY;
+  const finsBottomY = topY + finsH;
+  const trimY       = finsBottomY;
+  const canopyY     = trimY + trimH;
+  const groundY     = canopyY + canopyH;
+
+  // Bright Miami sky halo behind the building so it lifts off the
+  // synthwave / nightmare backdrop instead of blending into it.
+  const halo = ctx.createLinearGradient(0, topY - 60, 0, horizon);
+  halo.addColorStop(0,   'rgba(180, 220, 245, 0)');
+  halo.addColorStop(0.7, `rgba(180, 220, 245, ${0.32 * t})`);
+  halo.addColorStop(1,   `rgba(180, 220, 245, ${0.50 * t})`);
+  ctx.fillStyle = halo;
+  ctx.fillRect(leftX - 80, topY - 60, baseW + 160, baseH + 60);
+
+  // Pale base shell behind the fins so gaps between fins read as
+  // building interior, not transparent sky.
+  ctx.fillStyle = '#cfd8dd';
+  ctx.fillRect(leftX, finsTopY, baseW, baseH);
+
+  // === Dark-blue glass curtain wall (ground floor) ===
+  const groundGrad = ctx.createLinearGradient(0, groundY, 0, horizon);
+  groundGrad.addColorStop(0,   '#34526c');
+  groundGrad.addColorStop(0.4, '#446680');
+  groundGrad.addColorStop(1,   '#6a98b3');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(leftX, groundY, baseW, groundH);
+  // Vertical mullions across the curtain wall.
+  const mullCount = Math.max(8, Math.floor(baseW / 28));
+  const mullW = Math.max(1, baseW * 0.0022);
+  ctx.fillStyle = 'rgba(20, 30, 45, 0.65)';
+  for (let i = 1; i < mullCount; i++) {
+    const mx = leftX + (baseW * i) / mullCount;
+    ctx.fillRect(mx - mullW / 2, groundY, mullW, groundH);
+  }
+  // Top + bottom horizontal mullions (frame the ground floor).
+  ctx.fillStyle = 'rgba(35, 50, 70, 0.9)';
+  ctx.fillRect(leftX, groundY, baseW, Math.max(1, baseH * 0.006));
+  ctx.fillRect(leftX, horizon - Math.max(1, baseH * 0.012), baseW, Math.max(1, baseH * 0.012));
+
+  // Subtle interior glow behind a few of the panes — only when close
+  // enough that the detail isn't lost.
+  if (t > 0.55 && groundH > 14) {
+    ctx.fillStyle = 'rgba(255, 230, 170, 0.30)';
+    for (let i = 1; i < mullCount; i += 3) {
+      const px = leftX + (baseW * i) / mullCount + mullW / 2;
+      const pw = (baseW / mullCount) - mullW;
+      ctx.fillRect(px, groundY + groundH * 0.55, pw, groundH * 0.30);
+    }
+  }
+
+  // === Glass canopy (turquoise-tinted overhang strip) ===
+  const canopyGrad = ctx.createLinearGradient(0, canopyY, 0, canopyY + canopyH);
+  canopyGrad.addColorStop(0,    'rgba(205, 240, 240, 0.95)');
+  canopyGrad.addColorStop(0.5,  'rgba(155, 215, 220, 0.88)');
+  canopyGrad.addColorStop(1,    'rgba(115, 188, 200, 0.78)');
+  ctx.fillStyle = canopyGrad;
+  ctx.fillRect(leftX, canopyY, baseW, canopyH);
+  // Bright top-edge highlight on the canopy.
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.fillRect(leftX, canopyY, baseW, Math.max(1, canopyH * 0.22));
+
+  // === Aluminum trim band between fins and canopy ===
+  ctx.fillStyle = '#e3eaee';
+  ctx.fillRect(leftX, trimY, baseW, trimH);
+
+  // === Undulating vertical fins ===
+  // Two overlapping sine waves drive the top contour so it looks
+  // organic, not metronomically sinusoidal. Each fin is a thin
+  // silver rectangle with a left→right gradient for depth.
+  const finCount = Math.max(20, Math.floor(baseW / Math.max(4, 12 - 6 * t)));
+  const finPitch = baseW / finCount;
+  const finGap   = Math.max(0.5, finPitch * 0.18);
+  const finW     = Math.max(1, finPitch - finGap);
+  for (let i = 0; i < finCount; i++) {
+    const fx = leftX + finPitch * (i + 0.5);
+    const u  = i / Math.max(1, finCount - 1);
+    const wave1 = Math.sin(u * Math.PI * 3.5)        * finsH * 0.30;
+    const wave2 = Math.sin(u * Math.PI * 7.2 + 1.1)  * finsH * 0.10;
+    const topOffset = wave1 + wave2;
+    const finTopY    = finsTopY + Math.max(0, topOffset);
+    const finBottomY = finsBottomY + topOffset * 0.18;
+    const finH = finBottomY - finTopY;
+    if (finH <= 0) continue;
+    const fg = ctx.createLinearGradient(fx - finW / 2, 0, fx + finW / 2, 0);
+    fg.addColorStop(0,    '#b5bfca');
+    fg.addColorStop(0.4,  '#e8eef2');
+    fg.addColorStop(1,    '#8a96a4');
+    ctx.fillStyle = fg;
+    ctx.fillRect(fx - finW / 2, finTopY, finW, finH);
+  }
+
+  // === Signage at street level (fades in as the player gets close) ===
+  if (t > 0.45 && groundH > 18) {
+    const signAlpha = clamp((t - 0.45) / 0.25, 0, 1);
+    const fontSize = Math.max(8, Math.floor(baseH * 0.045));
+    ctx.fillStyle = `rgba(245, 252, 255, ${signAlpha * 0.95})`;
+    ctx.font = `900 ${fontSize}px 'Courier New', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('MIAMI BEACH CONVENTION CENTER', cx, groundY + groundH * 0.20);
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
+function drawGround() {
+  const nightmare = isNightmare();
+  const horizon = H * 0.58;
+  // Ground gradient — purple synthwave by default, dim crimson-into-pitch
+  // in Nightmare.
   const g = ctx.createLinearGradient(0, horizon, 0, H);
-  g.addColorStop(0, '#280a4a');
-  g.addColorStop(1, '#0a0020');
+  if (nightmare) {
+    g.addColorStop(0, '#1a0508');
+    g.addColorStop(1, '#020002');
+  } else {
+    g.addColorStop(0, '#280a4a');
+    g.addColorStop(1, '#0a0020');
+  }
   ctx.fillStyle = g;
   ctx.fillRect(0, horizon, W, H - horizon);
 
-  // Grid lines on ground
-  ctx.strokeStyle = 'rgba(255,43,214,0.55)';
+  // Grid lines on ground — magenta normally, dim blood-red in Nightmare.
+  ctx.strokeStyle = nightmare ? 'rgba(170, 22, 30, 0.45)' : 'rgba(255,43,214,0.55)';
   ctx.lineWidth = 1;
   // Horizontal grid lines
   for (let i = 1; i <= 18; i++) {
@@ -3315,7 +3854,7 @@ function drawPolygon(x1, y1, x2, y2, x3, y3, x4, y4, color) {
   ctx.fill();
 }
 
-function renderRoadSegment(p1, p2, color, fog) {
+function renderRoadSegment(p1, p2, color, fog, segIndex) {
   const c = colorFor(color, fog);
   const r1 = (p1.screen.w / Math.max(6, 6)) * 1; // rumble width fixed
   const r2 = (p2.screen.w / Math.max(6, 6)) * 1;
@@ -3323,6 +3862,7 @@ function renderRoadSegment(p1, p2, color, fog) {
   const rumble2 = p2.screen.w / 5;
   const lane1 = p1.screen.w / 30;
   const lane2 = p2.screen.w / 30;
+  const isChecker = (color === 'START' || color === 'FINISH');
 
   // grass (full width band)
   ctx.fillStyle = c.grass;
@@ -3340,15 +3880,36 @@ function renderRoadSegment(p1, p2, color, fog) {
     p2.screen.x + p2.screen.w,            p2.screen.y,
     p2.screen.x + p2.screen.w + rumble2,  p2.screen.y, c.rumble);
 
-  // road
-  drawPolygon(
-    p1.screen.x - p1.screen.w, p1.screen.y,
-    p1.screen.x + p1.screen.w, p1.screen.y,
-    p2.screen.x + p2.screen.w, p2.screen.y,
-    p2.screen.x - p2.screen.w, p2.screen.y, c.road);
+  // road — checkered pattern for START / FINISH, solid otherwise.
+  if (isChecker) {
+    // Six columns across the road width, alternating white/black; row
+    // parity comes from segIndex so the columns stagger correctly as
+    // the player drives across the strip, giving the classic
+    // racing-flag look.
+    const COLS = 6;
+    const w1Full = p1.screen.w * 2;
+    const w2Full = p2.screen.w * 2;
+    const x1Left = p1.screen.x - p1.screen.w;
+    const x2Left = p2.screen.x - p2.screen.w;
+    for (let k = 0; k < COLS; k++) {
+      const isWhite = ((k + (segIndex | 0)) % 2) === 0;
+      const fill = isWhite ? '#ffffff' : '#0a0a0a';
+      const a1 = x1Left + (w1Full * k)       / COLS;
+      const b1 = x1Left + (w1Full * (k + 1)) / COLS;
+      const a2 = x2Left + (w2Full * k)       / COLS;
+      const b2 = x2Left + (w2Full * (k + 1)) / COLS;
+      drawPolygon(a1, p1.screen.y, b1, p1.screen.y, b2, p2.screen.y, a2, p2.screen.y, fill);
+    }
+  } else {
+    drawPolygon(
+      p1.screen.x - p1.screen.w, p1.screen.y,
+      p1.screen.x + p1.screen.w, p1.screen.y,
+      p2.screen.x + p2.screen.w, p2.screen.y,
+      p2.screen.x - p2.screen.w, p2.screen.y, c.road);
+  }
 
-  // lane markers
-  if (c.lane) {
+  // lane markers — never on the checker; the squares already structure the road.
+  if (c.lane && !isChecker) {
     const lw1 = (p1.screen.w * 2 / LANES) - lane1 / 2;
     const lw2 = (p2.screen.w * 2 / LANES) - lane2 / 2;
     let x1 = p1.screen.x - p1.screen.w + lw1;
@@ -3386,7 +3947,7 @@ function drawSpriteShape(kind, sx, sy, w, h) {
   ctx.save();
   switch (kind) {
     case 'palm': drawPalm(sx, sy, w * 2.0, h * 3.0); break;
-    case 'billboard': drawBillboard(sx, sy, w * 1.4, h * 0.9); break;
+    case 'ic_billboard': drawIcBillboard(sx, sy, w * 7.75, h * 5.75); break;
     case 'sponsor': drawSponsor(sx, sy, w * 1.55, h * 1.55); break;
     case 'fm': drawFM(sx, sy, w * 1.6, h * 1.6); break;
     case 'allocator': drawAllocator(sx, sy, w * 1.65, h * 1.65); break;
@@ -3400,15 +3961,17 @@ function drawSpriteShape(kind, sx, sy, w, h) {
 
 function drawPalm(x, y, w, h) {
   if (w < 4) return;
-  ctx.strokeStyle = '#3a1a00';
+  const nightmare = isNightmare();
+  // Trunk — near-black in Nightmare, warm brown otherwise.
+  ctx.strokeStyle = nightmare ? '#0e0508' : '#3a1a00';
   ctx.lineWidth = Math.max(2, w * 0.08);
   ctx.beginPath();
   ctx.moveTo(x, y);
   ctx.quadraticCurveTo(x + w * 0.1, y - h * 0.5, x - w * 0.05, y - h);
   ctx.stroke();
-  // fronds
+  // Fronds — dead crimson in Nightmare, tropical green otherwise.
   const tx = x - w * 0.05, ty = y - h;
-  ctx.fillStyle = '#0d6e4a';
+  ctx.fillStyle = nightmare ? '#3a060a' : '#0d6e4a';
   for (let a = 0; a < 7; a++) {
     const ang = -Math.PI / 2 + (a - 3) * 0.45;
     const fl = h * 0.55;
@@ -3420,30 +3983,90 @@ function drawPalm(x, y, w, h) {
     ctx.lineTo(tx, ty);
     ctx.fill();
   }
-  ctx.fillStyle = '#5a3a00';
+  // Crown bulb at the trunk join.
+  ctx.fillStyle = nightmare ? '#1a0408' : '#5a3a00';
   ctx.beginPath(); ctx.arc(tx, ty, w * 0.1, 0, Math.PI * 2); ctx.fill();
 }
 
-function drawBillboard(x, y, w, h) {
+// iConnections roadside billboard — two support posts plus a bright
+// panel showing the iC logo (loaded from assets/icon_logo.svg) and the
+// "iConnections" wordmark. Falls back to a stylized "iC" if the SVG
+// hasn't finished loading.
+function drawIcBillboard(x, y, w, h) {
   if (w < 8) return;
-  // posts
-  ctx.fillStyle = '#222';
-  ctx.fillRect(x - w * 0.4, y - h * 0.2, w * 0.06, h * 0.2);
-  ctx.fillRect(x + w * 0.34, y - h * 0.2, w * 0.06, h * 0.2);
-  // sign
-  ctx.fillStyle = '#0a0030';
-  ctx.fillRect(x - w / 2, y - h * 1.0, w, h * 0.8);
+  const panelX = x - w / 2;
+  const panelY = y - h * 1.1;
+  const panelW = w;
+  const panelH = h * 0.85;
+
+  // Support posts (slightly thicker than the GA billboard's so the
+  // iConnections sign reads as larger / more deliberate from a distance).
+  ctx.fillStyle = '#1a1024';
+  ctx.fillRect(x - w * 0.42, y - h * 0.28, w * 0.07, h * 0.28);
+  ctx.fillRect(x + w * 0.35, y - h * 0.28, w * 0.07, h * 0.28);
+
+  // Panel background — warm off-white card with a soft purple drop-shadow
+  // band on the bottom edge to suggest depth.
+  ctx.fillStyle = '#fbf6ff';
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.fillStyle = 'rgba(105, 43, 126, 0.18)';
+  ctx.fillRect(panelX, panelY + panelH - panelH * 0.08, panelW, panelH * 0.08);
+
+  // Magenta neon frame matching the rest of the title-screen palette.
   ctx.strokeStyle = '#ff2bd6';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x - w / 2, y - h * 1.0, w, h * 0.8);
-  if (w > 60) {
-    ctx.fillStyle = '#ff2bd6';
-    ctx.font = `bold ${Math.floor(h * 0.22)}px 'Courier New'`;
-    ctx.textAlign = 'center';
-    ctx.fillText('GLOBAL', x, y - h * 0.7);
-    ctx.fillStyle = '#67d2ff';
-    ctx.fillText('ALTS', x, y - h * 0.45);
+  ctx.lineWidth = Math.max(1.5, w * 0.022);
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+  if (w > 50) {
+    ctx.shadowColor = '#ff2bd6';
+    ctx.shadowBlur = 12;
+    ctx.strokeRect(panelX, panelY, panelW, panelH);
+    ctx.shadowBlur = 0;
   }
+
+  // Logo placement — when the panel is wide enough we put the logo on
+  // the left and the wordmark to the right; when it's narrow we center
+  // the logo alone. Logo aspect is 46:45 per the source SVG.
+  const padding = panelH * 0.14;
+  const logoH = panelH - padding * 2;
+  const logoW = logoH * (46 / 45);
+  const showWord = w > 70;
+  const logoX = showWord
+    ? panelX + panelW * 0.07
+    : panelX + (panelW - logoW) / 2;
+  const logoY = panelY + padding;
+
+  if (icLogoReady) {
+    try {
+      ctx.drawImage(icLogo, logoX, logoY, logoW, logoH);
+    } catch (e) {
+      // Some browsers throw if an SVG isn't fully decoded yet — render
+      // the text-only fallback instead.
+      ctx.fillStyle = '#692B7E';
+      ctx.font = `bold ${Math.floor(panelH * 0.55)}px 'Courier New'`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('iC', logoX + logoW / 2, logoY + logoH / 2);
+    }
+  } else {
+    // Pre-load fallback: simple iC monogram in the brand purple.
+    ctx.fillStyle = '#692B7E';
+    ctx.font = `bold ${Math.floor(panelH * 0.55)}px 'Courier New'`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('iC', logoX + logoW / 2, logoY + logoH / 2);
+  }
+
+  // Wordmark
+  if (showWord) {
+    ctx.fillStyle = '#692B7E';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.floor(panelH * 0.32)}px 'Courier New'`;
+    // ctx.fillText('iConnections', panelX + panelW * 0.07 + logoW + panelW * 0.04, panelY + panelH * 0.5);
+  }
+
+  // Reset text baseline so we don't leak state into other sprites.
+  ctx.textBaseline = 'alphabetic';
 }
 
 function drawSponsor(x, y, w, h) {
@@ -4387,7 +5010,7 @@ function render() {
 
     if (seg.p1.camera.z <= 0.1 || seg.p2.screen.y >= maxy || seg.p2.screen.y >= seg.p1.screen.y) continue;
 
-    renderRoadSegment(seg.p1, seg.p2, seg.color, seg.fog);
+    renderRoadSegment(seg.p1, seg.p2, seg.color, seg.fog, seg.index);
     maxy = seg.p2.screen.y;
   }
 
@@ -4398,6 +5021,21 @@ function render() {
     for (const sp of seg.sprites) {
       if (spriteBlocked(sp)) continue;
       renderSprite(sp, seg.p1, seg.p1.screen.w);
+    }
+    // Scurrying bugs on this segment range — bugs are dynamic so we
+    // project them using the same segment basis as rivals.
+    for (const b of bugs) {
+      const segZ = seg.index * SEG_LEN;
+      if (b.z >= segZ && b.z < segZ + SEG_LEN) {
+        const scale = seg.p1.screen.scale;
+        const sx = seg.p1.screen.x + (scale * b.x * ROAD_WIDTH * (W / 2));
+        const sy = seg.p1.screen.y;
+        // Bumped substantially — bugs are roughly rival-sized now so
+        // they read clearly against the dim Nightmare palette.
+        const sw = scale * 420 * (W / 2);
+        const sh = scale * 300 * (W / 2);
+        drawBug(sx, sy, sw, sh, b);
+      }
     }
     // Rivals on this segment range — reuse segment's projected basis so curves work
     for (const r of rivals) {
@@ -4646,6 +5284,54 @@ function render() {
   }
 
   ctx.restore();
+
+  // Nightmare flash — draws AFTER the camera-shake restore so the
+  // overlay covers the full canvas (no shake offset gaps). Walks the
+  // hand-tuned staccato pulse list and finds whichever pulse the
+  // current age falls inside. Each pulse is a sharp ON window with a
+  // quick attack + decay; gaps between pulses leave the scene at full
+  // color so the rhythm is felt.
+  if (nightmareFlash.active) {
+    const age = nightmareFlash.age;
+    // Find the active pulse + how far into it we are.
+    let pulseIntensity = 0;       // 0..1 — drives the grayscale wash
+    let pulseLeadingEdge = 0;     // 0..1 — only the leading edge gets the white pop
+    for (const [start, len] of NIGHTMARE_STROBE_PULSES) {
+      if (age < start || age >= start + len) continue;
+      const lp = (age - start) / len;            // 0..1 within the pulse
+      // Snappy attack (first 15% of the pulse ramps up to 1.0),
+      // then a quick decay to ~0.55 to make each pulse feel hit-and-hold
+      // rather than a soft fade.
+      const attack = clamp(lp / 0.15, 0, 1);
+      const hold   = 1 - clamp((lp - 0.15) / 0.85, 0, 1) * 0.45;
+      pulseIntensity = attack * hold;
+      // The white pop is only the first 25% of the pulse.
+      pulseLeadingEdge = (1 - clamp(lp / 0.25, 0, 1)) * attack;
+      break;
+    }
+
+    if (pulseLeadingEdge > 0.01) {
+      ctx.fillStyle = `rgba(255, 250, 250, ${pulseLeadingEdge * 0.78})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (pulseIntensity > 0.02) {
+      // Stack saturation twice at peak so the desaturation is
+      // unmistakable — a single pass leaves the scene slightly tinted
+      // toward gray; a second pass forces it the rest of the way.
+      ctx.save();
+      ctx.globalCompositeOperation = 'saturation';
+      ctx.fillStyle = `rgba(128, 128, 128, ${pulseIntensity})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(128, 128, 128, ${pulseIntensity})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      // A faint dark vignette during the pulse reinforces the "screen
+      // glitched out" feeling.
+      ctx.fillStyle = `rgba(0, 0, 0, ${pulseIntensity * 0.18})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
 }
 
 // =====================================================================
