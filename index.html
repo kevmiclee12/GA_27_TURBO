@@ -1147,8 +1147,17 @@ let musicTimer = null;
 let musicNextTime = 0;
 let musicStep = 0;
 
-const MUSIC_BPM = currentDifficulty === 'nightmare' ? 148 : 124;
-const MUSIC_SIXTEENTH = 60 / MUSIC_BPM / 4; // seconds per 16th
+// MUSIC_BPM / MUSIC_SIXTEENTH are recomputed at the start of every race
+// via refreshMusicTempo(). They need to be `let` (not `const`) because
+// `currentDifficulty` doesn't take its real value until the player
+// picks one from the modal — script-load-time evaluation would always
+// see 'normal' and lock the tempo there. Nightmare runs ~19% faster.
+let MUSIC_BPM = 124;
+let MUSIC_SIXTEENTH = 60 / MUSIC_BPM / 4; // seconds per 16th
+function refreshMusicTempo() {
+  MUSIC_BPM = currentDifficulty === 'nightmare' ? 148 : 124;
+  MUSIC_SIXTEENTH = 60 / MUSIC_BPM / 4;
+}
 const MUSIC_BARS = 32;                      // A·A·B·B·Bridge·Bridge·A·A, 4 bars each
 const MUSIC_STEPS = MUSIC_BARS * 16;
 
@@ -1197,6 +1206,8 @@ const M_BRIDGE_CLIMAX_LEAD = [M_F.A4, M_F.E5, M_F.A5, M_F.E6];
 
 function startMusic() {
   if (musicCtx) return;
+  // Pick up the current difficulty's tempo BEFORE any scheduling runs.
+  refreshMusicTempo();
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
