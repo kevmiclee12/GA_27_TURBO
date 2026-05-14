@@ -3329,8 +3329,25 @@ function update(dt) {
       }
       // Phishing emails do NOT affect rivals — they're a player-only event.
     }
-    // Bugs do NOT affect rivals — they pass through harmlessly. Bugs
-    // are a player-only hazard, similar to phishing.
+    // Bug collisions — bugs are dynamic so we walk the bugs array each
+    // frame and check the rival's current z + x. Matches the platform-
+    // outage profile silently (no toast / hazard burst — those are
+    // player-only events). r.hazardCool prevents a re-trigger on the
+    // next frame, same as the static hazards above.
+    if (r.hazardCool <= 0 && bugs.length) {
+      const rZ = r.z + PLAYER_Z * 0.5;
+      for (const b of bugs) {
+        if (b.hit) continue;
+        if (Math.abs(b.z - rZ) > SEG_LEN * 0.6) continue;
+        if (Math.abs(b.x - r.x) > 0.20) continue;
+        b.hit = true;
+        r.hazardCool = 1.4;
+        r.speed *= 0.4;
+        r.spinoutTimer = 1.4; r.spinoutMax = 1.4;
+        r.spinoutTotal = Math.PI * 4 * (Math.random() < 0.5 ? 1 : -1);
+        break;
+      }
+    }
     // Decay rival hazard cooldown + spinout
     if (r.hazardCool > 0) r.hazardCool -= dt;
     if (r.spinoutTimer > 0) {
